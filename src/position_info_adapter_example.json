@@ -1,0 +1,203 @@
+[
+	[
+		33300,
+		{
+			"tick_lower_index": 33300,
+			"tick_upper_index": 33840,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 48383761816,
+			"upper_bounder_coin_b_amount": 1388523760476,
+			"tick_lower_coin_a_price": 0.027933690666618983,
+			"tick_upper_coin_a_price": 0.029483500779726484,
+			"tick_lower_coin_b_price": 35.79906471846949,
+			"tick_upper_coin_b_price": 33.91727486742763,
+			"fee_coin_a_claimed_total": 149780418,
+			"fee_coin_b_claimed_total": 3223774290,
+			"fee_value_in_u_claimed_total": 12.850787607800472,
+			"reward_amount_claimed_total": [
+				{
+					"amount_owed": 999262613,
+					"coin_type": 1
+				},
+				{
+					"amount_owed": 373776267,
+					"coin_type": 3
+				}
+			],
+			"reward_value_in_u_claimed_total": 19.82637077887616,
+			"init_tick": 33516,
+			"position_opened": false,
+			"on_position_times": 1,
+			"short_times_on_base_coin": 0
+		}
+	],
+	[
+		32760,
+		{
+			"tick_lower_index": 32760,
+			"tick_upper_index": 33300,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 49707851965,
+			"upper_bounder_coin_b_amount": 1351537035835,
+			"tick_lower_coin_a_price": 0.02646534684222106,
+			"tick_upper_coin_a_price": 0.027933690666618983,
+			"tick_lower_coin_b_price": 37.78525956836002,
+			"tick_upper_coin_b_price": 35.79906471846949,
+			"fee_coin_a_claimed_total": 122152554,
+			"fee_coin_b_claimed_total": 707317928,
+			"fee_value_in_u_claimed_total": 6.842171297243604,
+			"reward_amount_claimed_total": [
+				{
+					"amount_owed": 274248419,
+					"coin_type": 1
+				},
+				{
+					"amount_owed": 102583193,
+					"coin_type": 3
+				}
+			],
+			"reward_value_in_u_claimed_total": 5.190343929976187,
+			"init_tick": 33271,
+			"position_opened": false,
+			"on_position_times": 2,
+			"short_times_on_base_coin": 0
+		}
+	],
+	[
+		32220,
+		{
+			"tick_lower_index": 32220,
+			"tick_upper_index": 32760,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 51068177716,
+			"upper_bounder_coin_b_amount": 1315535543020,
+			"tick_lower_coin_a_price": 0.02507418700372673,
+			"tick_upper_coin_a_price": 0.02646534684222106,
+			"tick_lower_coin_b_price": 39.88165198940935,
+			"tick_upper_coin_b_price": 37.78525956836002,
+			"fee_coin_a_claimed_total": 159559133,
+			"fee_coin_b_claimed_total": 1821984188,
+			"fee_value_in_u_claimed_total": 10.097698896860816,
+			"reward_amount_claimed_total": [
+				{
+					"amount_owed": 425158771,
+					"coin_type": 1
+				},
+				{
+					"amount_owed": 159031526,
+					"coin_type": 3
+				}
+			],
+			"reward_value_in_u_claimed_total": 7.730382749457526,
+			"init_tick": 32747,
+			"position_opened": false,
+			"on_position_times": 2,
+			"short_times_on_base_coin": 0
+		}
+	],
+	[
+		31680,
+		{
+			"tick_lower_index": 31680,
+			"tick_upper_index": 32220,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 52465730707,
+			"upper_bounder_coin_b_amount": 1280493037972,
+			"tick_lower_coin_a_price": 0.023756153949014123,
+			"tick_upper_coin_a_price": 0.02507418700372673,
+			"tick_lower_coin_b_price": 42.094355935991054,
+			"tick_upper_coin_b_price": 39.88165198940935,
+			"fee_coin_a_claimed_total": 101676866,
+			"fee_coin_b_claimed_total": 66394321,
+			"fee_value_in_u_claimed_total": 4.267723974007864,
+			"reward_amount_claimed_total": [
+				{
+					"amount_owed": 81981203,
+					"coin_type": 1
+				},
+				{
+					"amount_owed": 30665240,
+					"coin_type": 3
+				}
+			],
+			"reward_value_in_u_claimed_total": 1.3939685762343237,
+			"init_tick": 32200,
+			"position_opened": false,
+			"on_position_times": 1,
+			"short_times_on_base_coin": 0
+		}
+	],
+	[
+		31140,
+		{
+			"tick_lower_index": 31140,
+			"tick_upper_index": 31680,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 53901529714,
+			"upper_bounder_coin_b_amount": 1246383975709,
+			"tick_lower_coin_a_price": 0.022507403744152516,
+			"tick_upper_coin_a_price": 0.023756153949014123,
+			"tick_lower_coin_b_price": 44.42982457538234,
+			"tick_upper_coin_b_price": 42.094355935991054,
+			"fee_coin_a_claimed_total": 123204490,
+			"fee_coin_b_claimed_total": 711359103,
+			"fee_value_in_u_claimed_total": 6.014051018854833,
+			"reward_amount_claimed_total": [
+				{
+					"amount_owed": 89804918,
+					"coin_type": 1
+				},
+				{
+					"amount_owed": 33591717,
+					"coin_type": 3
+				}
+			],
+			"reward_value_in_u_claimed_total": 1.4597494291991642,
+			"init_tick": 31599,
+			"position_opened": false,
+			"on_position_times": 1,
+			"short_times_on_base_coin": 0
+		}
+	],
+	[
+		30600,
+		{
+			"tick_lower_index": 30600,
+			"tick_upper_index": 31140,
+			"coin_type_a": "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP",
+			"coin_type_b": "0x2::sui::SUI",
+			"pos_object_id": "0x693bc0ff0d2b2c6e6c950bc4f1ccc8728e0dbb90ffe569ff84ad35972df48962",
+			"liquidity": 9600000000000,
+			"lower_bounder_coin_a_amount": 55376621395,
+			"upper_bounder_coin_b_amount": 1213183491700,
+			"tick_lower_coin_a_price": 0.021324294512888264,
+			"tick_upper_coin_a_price": 0.022507403744152516,
+			"tick_lower_coin_b_price": 46.89486910789037,
+			"tick_upper_coin_b_price": 44.42982457538234,
+			"fee_coin_a_claimed_total": 0,
+			"fee_coin_b_claimed_total": 0,
+			"fee_value_in_u_claimed_total": 0,
+			"reward_amount_claimed_total": [],
+			"reward_value_in_u_claimed_total": 0,
+			"init_tick": 30902,
+			"position_opened": true,
+			"on_position_times": 1,
+			"short_times_on_base_coin": 0
+		}
+	]
+]
