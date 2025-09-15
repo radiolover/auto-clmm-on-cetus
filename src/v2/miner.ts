@@ -1,5 +1,6 @@
 
 import Decimal from 'decimal.js';
+// import d from 'decimal.js';
 import BN from 'bn.js'
 import * as fs from 'fs';
 import * as util from 'util';
@@ -95,7 +96,7 @@ const COIN_B_NAME = 'SUI';
 
 const SUI_GAS_RESERVED = new BN(1 * 1000000000); // 1 sui
 
-const ACCOUNT_ADDRESS = '0xa7ed3a82fe1fb25659ec10e0dfb5a237c0c5bfeb1765e002466a68f644733626';
+const ACCOUNT_ADDRESS = '';
 
 const date = new Date();
 const LOG_FILE_NAME = 'log_file_name_' + date.toISOString() + '.log';
@@ -106,7 +107,6 @@ const LOG_FILE_NAME = 'log_file_name_' + date.toISOString() + '.log';
 
 const MNEMONICS = '';  // your mnemonics
 // Account 1, Account 2 .... of your wallet
-
 const HD_WALLET_PATH = 'm\/44\'\/784\'\/0\'\/0\'\/0\'';
 // const path = 'm\/44\'\/784\'\/1\'\/0\'\/0\''
 // const path = 'm\/44\'\/784\'\/2\'\/0\'\/0\''
@@ -114,15 +114,16 @@ const HD_WALLET_PATH = 'm\/44\'\/784\'\/0\'\/0\'\/0\'';
 
 
 // 60 ticks base range for 0.25% fee rate
-const BASE_TICK_RANGE: number = 60
-
-
+// const BASE_TICK_RANGE: number = 60
 // position param
-const BASE_TICK_RANGE_COUNT: number = 1
-const POSITION_TICK_RANGE: number = BASE_TICK_RANGE * BASE_TICK_RANGE_COUNT
+// const BASE_TICK_RANGE_COUNT: number = 1
 
 
-const POOL_TICK_SPACING_TIMES: number = 6; 
+
+
+
+const POOL_TICK_SPACING_TIMES: number = 12; 
+const POSITION_TICK_RANGE: number = POOL_TICK_SPACING_USDC_SUI_0_05 * POOL_TICK_SPACING_TIMES;
 
 
 
@@ -490,15 +491,18 @@ type BalanceChange = {
     cetus_change: BN;
 };
 
-
-function getBalanceChange(rst: SuiTransactionBlockResponse): BalanceChange {
-
+function newBalanceChange(): BalanceChange {
     let ret: BalanceChange = {
         usdc_change: new BN(0),
         sui_change: new BN(0),
         cetus_change: new BN(0)
     };
+    return ret;
+}
 
+
+function getBalanceChange(rst: SuiTransactionBlockResponse): BalanceChange {
+    let ret = newBalanceChange();
     if (rst.balanceChanges) {
         for (const balance of rst.balanceChanges) {
             if (getCoinTypeEnum(balance.coinType) === CoinTypeEnum.CETUS) {
@@ -626,7 +630,7 @@ function getAddLiquidityTickIndex(add_liqui_event: LiquidityEvent, tick_lower_in
 
 
 
-type ImpermanentLossCtx = {
+type ImpermanentLossCtx2 = {
     sui_price_when_add_liquidity: Decimal;
     sui_price_lower_index: Decimal;
     sui_price_upper_index: Decimal;
@@ -638,31 +642,50 @@ type ImpermanentLossCtx = {
     impermanent_value_upper_index: Decimal;
     position_value_lower_index: Decimal;
     position_value_upper_index: Decimal;
+    quota_value_lower_index: Decimal;
+    quota_value_upper_index: Decimal;
 
     impermanent_loss_lower_index: Decimal;
     impermanent_loss_upper_index: Decimal;
-    value_loss_lower_index: Decimal;
-    value_loss_upper_index: Decimal;
+    pos_value_loss_lower_index: Decimal;
+    pos_value_loss_upper_index: Decimal;
+    quota_value_loss_lower_index: Decimal;
+    quota_value_loss_upper_index: Decimal;
 };
 
-function getImpermanentLossCtx(tick_lower_index: number, tick_when_add_liquidity: number, tick_upper_index: number, add_liqui_event: LiquidityEvent): ImpermanentLossCtx {
-
-    let ret: ImpermanentLossCtx = {
+function newImpermanentLossCtx2(): ImpermanentLossCtx2 {
+    let ret: ImpermanentLossCtx2 = {
         sui_price_when_add_liquidity: d(0),
         sui_price_lower_index: d(0),
         sui_price_upper_index: d(0),
         coin_a_amount_lower_index: {coin_amount_a: '', coin_amount_b: ''},
         coin_b_amount_upper_index: {coin_amount_a: '', coin_amount_b: ''},
+
         initial_value: d(0),
         impermanent_value_lower_index: d(0),
         impermanent_value_upper_index: d(0),
         position_value_lower_index: d(0),
         position_value_upper_index: d(0),
+        quota_value_lower_index: d(0),
+        quota_value_upper_index: d(0),
+
         impermanent_loss_lower_index: d(0),
         impermanent_loss_upper_index: d(0),
-        value_loss_lower_index: d(0),
-        value_loss_upper_index: d(0)
+        pos_value_loss_lower_index: d(0),
+        pos_value_loss_upper_index: d(0),
+        quota_value_loss_lower_index: d(0),
+        quota_value_loss_upper_index: d(0)
     };
+    return ret;
+}
+
+
+
+
+function getImpermanentLossCtx2(tick_lower_index: number, tick_when_add_liquidity: number, tick_upper_index: number, 
+    add_liqui_event: LiquidityEvent, check_point_status: CheckPointStatus,  check_point_statu_after_add_liquidity: CheckPointStatus): ImpermanentLossCtx2 {
+
+    let ret = newImpermanentLossCtx2();
 
     ret.sui_price_when_add_liquidity = d(1).div(TickMath.tickIndexToPrice(tick_when_add_liquidity, 6, 9));
     ret.sui_price_lower_index = d(1).div(TickMath.tickIndexToPrice(tick_lower_index, 6, 9));
@@ -693,14 +716,358 @@ function getImpermanentLossCtx(tick_lower_index: number, tick_when_add_liquidity
     ret.position_value_lower_index = Decimal(ret.coin_a_amount_lower_index.coin_amount_a).mul(Decimal.pow(10, -6));
     ret.position_value_upper_index = Decimal(ret.coin_b_amount_upper_index.coin_amount_b).mul(Decimal.pow(10, -9).mul(ret.sui_price_upper_index));
 
+
+
+    let quota_value_begin_in_initial_price = calcQuotaValue(check_point_status.sui_price, check_point_status);
+    let check_point_statu_in_round  = { ...check_point_statu_after_add_liquidity };
+
+
+
     ret.impermanent_loss_lower_index = ret.position_value_lower_index.sub(ret.impermanent_value_lower_index);
     ret.impermanent_loss_upper_index = ret.position_value_upper_index.sub(ret.impermanent_value_upper_index);
 
-    ret.value_loss_lower_index = ret.position_value_lower_index.sub(ret.initial_value);
-    ret.value_loss_upper_index = ret.position_value_upper_index.sub(ret.initial_value);
+    ret.pos_value_loss_lower_index = ret.position_value_lower_index.sub(ret.initial_value);
+    ret.pos_value_loss_upper_index = ret.position_value_upper_index.sub(ret.initial_value);
 
     return ret;
 }
+
+
+
+
+
+
+
+type ImpermanentLossCtx = {
+    sui_price_when_add_liquidity: Decimal;
+    sui_price_lower_index: Decimal;
+    sui_price_upper_index: Decimal;
+    usdc_price_when_add_liquidity: Decimal;
+    usdc_price_lower_index: Decimal;
+    usdc_price_upper_index: Decimal;
+    coin_amount_lower: CoinAmounts;
+    coin_amount_upper: CoinAmounts;
+
+
+    liquidity_amount_a_initial_index: Decimal;
+    liquidity_amount_b_initial_index: Decimal;
+    liquidity_amount_a_lower_index: Decimal;
+    liquidity_amount_b_lower_index: Decimal;
+    liquidity_amount_a_upper_index: Decimal;
+    liquidity_amount_b_upper_index: Decimal;
+    quota_amount_a_initial: Decimal;
+    quota_amount_b_initial: Decimal;
+    quota_amount_a_lower_index: Decimal;
+    quota_amount_b_lower_index: Decimal;
+    quota_amount_a_upper_index: Decimal;
+    quota_amount_b_upper_index: Decimal;
+
+    liquidity_value_initial_index: Decimal;
+    liquidity_value_lower_index: Decimal;
+    liquidity_value_upper_index: Decimal;
+    liquidity_hold_coin_ab_value_lower_index: Decimal;
+    liquidity_hold_coin_ab_value_upper_index: Decimal;
+    liquidity_hold_coin_a_value_lower_index: Decimal;
+    liquidity_hold_coin_a_value_upper_index: Decimal;
+    liquidity_hold_coin_b_value_lower_index: Decimal;
+    liquidity_hold_coin_b_value_upper_index: Decimal;
+
+    quota_value_initial: Decimal;
+    quota_value_lower_index: Decimal;
+    quota_value_upper_index: Decimal;
+    quota_hold_coin_ab_value_lower_index: Decimal;
+    quota_hold_coin_ab_value_upper_index: Decimal;
+    quota_hold_coin_a_value_lower_index: Decimal;
+    quota_hold_coin_a_value_upper_index: Decimal;
+    quota_hold_coin_b_value_lower_index: Decimal;
+    quota_hold_coin_b_value_upper_index: Decimal;
+
+
+    liquidity_impermanent_loss_coin_ab_lower_index: Decimal;
+    liquidity_impermanent_loss_coin_a_lower_index: Decimal;
+    liquidity_impermanent_loss_coin_b_lower_index: Decimal;
+
+    liquidity_impermanent_loss_coin_ab_upper_index: Decimal;
+    liquidity_impermanent_loss_coin_a_upper_index: Decimal;
+    liquidity_impermanent_loss_coin_b_upper_index: Decimal;
+
+    quota_impermanent_loss_coin_ab_lower_index: Decimal;
+    quota_impermanent_loss_coin_a_lower_index: Decimal;
+    quota_impermanent_loss_coin_b_lower_index: Decimal;
+
+    quota_impermanent_loss_coin_ab_upper_index: Decimal;
+    quota_impermanent_loss_coin_a_upper_index: Decimal;
+    quota_impermanent_loss_coin_b_upper_index: Decimal;
+};
+
+
+function newImpermanentLossCtx(): ImpermanentLossCtx {
+    let ret: ImpermanentLossCtx = {
+        sui_price_when_add_liquidity: d(0),
+        sui_price_lower_index: d(0),
+        sui_price_upper_index: d(0),
+        usdc_price_when_add_liquidity: d(0),
+        usdc_price_lower_index: d(0),
+        usdc_price_upper_index: d(0),
+        coin_amount_lower: {coin_amount_a: '', coin_amount_b: ''},
+        coin_amount_upper: {coin_amount_a: '', coin_amount_b: ''},
+
+
+        liquidity_amount_a_initial_index: d(0),
+        liquidity_amount_b_initial_index: d(0),
+        liquidity_amount_a_lower_index: d(0),
+        liquidity_amount_b_lower_index: d(0),
+        liquidity_amount_a_upper_index: d(0),
+        liquidity_amount_b_upper_index: d(0),
+        quota_amount_a_initial: d(0),
+        quota_amount_b_initial: d(0),
+        quota_amount_a_lower_index: d(0),
+        quota_amount_b_lower_index: d(0),
+        quota_amount_a_upper_index: d(0),
+        quota_amount_b_upper_index: d(0),
+
+        liquidity_value_initial_index: d(0),
+        liquidity_value_lower_index: d(0),
+        liquidity_value_upper_index: d(0),
+        liquidity_hold_coin_ab_value_lower_index: d(0),
+        liquidity_hold_coin_ab_value_upper_index: d(0),
+        liquidity_hold_coin_a_value_lower_index: d(0),
+        liquidity_hold_coin_a_value_upper_index: d(0),
+        liquidity_hold_coin_b_value_lower_index: d(0),
+        liquidity_hold_coin_b_value_upper_index: d(0),
+
+        quota_value_initial: d(0),
+        quota_value_lower_index: d(0),
+        quota_value_upper_index: d(0),
+        quota_hold_coin_ab_value_lower_index: d(0),
+        quota_hold_coin_ab_value_upper_index: d(0),
+        quota_hold_coin_a_value_lower_index: d(0),
+        quota_hold_coin_a_value_upper_index: d(0),
+        quota_hold_coin_b_value_lower_index: d(0),
+        quota_hold_coin_b_value_upper_index: d(0),
+
+
+        liquidity_impermanent_loss_coin_ab_lower_index: d(0),
+        liquidity_impermanent_loss_coin_a_lower_index: d(0),
+        liquidity_impermanent_loss_coin_b_lower_index: d(0),
+
+        liquidity_impermanent_loss_coin_ab_upper_index: d(0),
+        liquidity_impermanent_loss_coin_a_upper_index: d(0),
+        liquidity_impermanent_loss_coin_b_upper_index: d(0),
+
+        quota_impermanent_loss_coin_ab_lower_index: d(0),
+        quota_impermanent_loss_coin_a_lower_index: d(0),
+        quota_impermanent_loss_coin_b_lower_index: d(0),
+
+        quota_impermanent_loss_coin_ab_upper_index: d(0),
+        quota_impermanent_loss_coin_a_upper_index: d(0),
+        quota_impermanent_loss_coin_b_upper_index: d(0)
+
+    };
+    return ret;
+}
+
+
+function getImpermanentLossCtx(tick_lower_index: number, tick_when_add_liquidity: number, tick_upper_index: number, 
+    add_liqui_event: LiquidityEvent, check_point_status: CheckPointStatus,  check_point_statu_after_add_liquidity: CheckPointStatus): ImpermanentLossCtx {
+
+    let ret = newImpermanentLossCtx();
+
+    ret.usdc_price_when_add_liquidity = TickMath.tickIndexToPrice(tick_when_add_liquidity, 6, 9);
+    ret.usdc_price_lower_index = TickMath.tickIndexToPrice(tick_lower_index, 6, 9);
+    ret.usdc_price_upper_index = TickMath.tickIndexToPrice(tick_upper_index, 6, 9);
+
+    ret.sui_price_when_add_liquidity = d(1).div(ret.usdc_price_when_add_liquidity);
+    ret.sui_price_lower_index = d(1).div(ret.usdc_price_lower_index);
+    ret.sui_price_upper_index = d(1).div(ret.usdc_price_upper_index);
+
+    ret.coin_amount_lower = ClmmPoolUtil.getCoinAmountFromLiquidity(add_liqui_event.after_liquidity, 
+        TickMath.tickIndexToSqrtPriceX64(tick_lower_index),
+        TickMath.tickIndexToSqrtPriceX64(tick_lower_index),
+        TickMath.tickIndexToSqrtPriceX64(tick_upper_index),
+        false);
+    ret.coin_amount_upper = ClmmPoolUtil.getCoinAmountFromLiquidity(add_liqui_event.after_liquidity, 
+        TickMath.tickIndexToSqrtPriceX64(tick_upper_index),
+        TickMath.tickIndexToSqrtPriceX64(tick_lower_index),
+        TickMath.tickIndexToSqrtPriceX64(tick_upper_index),
+        false);
+
+
+   
+
+
+    ret.liquidity_amount_a_initial_index = d(add_liqui_event.amount_a.toString());
+    ret.liquidity_amount_b_initial_index = d(add_liqui_event.amount_b.toString());
+    ret.liquidity_amount_a_lower_index = d(ret.coin_amount_lower.coin_amount_a);
+    ret.liquidity_amount_b_lower_index = d(0);
+    ret.liquidity_amount_a_upper_index = d(0);
+    ret.liquidity_amount_b_upper_index = d(ret.coin_amount_upper.coin_amount_b);
+
+
+    ret.liquidity_value_initial_index = ret.liquidity_amount_a_initial_index.mul(Decimal.pow(10, -6)).add(
+        ret.liquidity_amount_b_initial_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_when_add_liquidity)
+    );
+
+    ret.liquidity_value_lower_index = ret.liquidity_amount_a_lower_index.mul(Decimal.pow(10, -6));
+    ret.liquidity_value_upper_index = ret.liquidity_amount_b_upper_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_upper_index);
+
+    ret.liquidity_hold_coin_ab_value_lower_index = ret.liquidity_amount_a_initial_index.mul(Decimal.pow(10, -6)).add(
+        ret.liquidity_amount_b_initial_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_lower_index)
+    );
+    ret.liquidity_hold_coin_ab_value_upper_index = ret.liquidity_amount_a_initial_index.mul(Decimal.pow(10, -6)).add(
+        ret.liquidity_amount_b_initial_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_upper_index)
+    );
+
+    // value in u not change
+    ret.liquidity_hold_coin_a_value_lower_index = ret.liquidity_value_initial_index;
+    ret.liquidity_hold_coin_a_value_upper_index = ret.liquidity_value_initial_index;
+
+
+    let liquidity_coin_b_value_initial_index = ret.liquidity_amount_a_initial_index.mul(Decimal.pow(10, -6)).mul(ret.usdc_price_when_add_liquidity).add(
+        ret.liquidity_amount_b_initial_index.mul(Decimal.pow(10, -9))
+    ); //  = ret.liquidity_value_initial_index.div(ret.sui_price_when_add_liquidity)
+
+    ret.liquidity_hold_coin_b_value_lower_index = liquidity_coin_b_value_initial_index.mul(ret.sui_price_lower_index);
+    ret.liquidity_hold_coin_b_value_upper_index = liquidity_coin_b_value_initial_index.mul(ret.sui_price_upper_index);
+
+
+    ret.liquidity_impermanent_loss_coin_ab_lower_index = ret.liquidity_value_lower_index.sub(ret.liquidity_hold_coin_ab_value_lower_index);
+    ret.liquidity_impermanent_loss_coin_ab_upper_index = ret.liquidity_value_upper_index.sub(ret.liquidity_hold_coin_ab_value_upper_index);
+    ret.liquidity_impermanent_loss_coin_a_lower_index = ret.liquidity_value_lower_index.sub(ret.liquidity_hold_coin_a_value_lower_index);
+    ret.liquidity_impermanent_loss_coin_a_upper_index = ret.liquidity_value_upper_index.sub(ret.liquidity_hold_coin_a_value_upper_index);
+    ret.liquidity_impermanent_loss_coin_b_lower_index = ret.liquidity_value_lower_index.sub(ret.liquidity_hold_coin_b_value_lower_index);
+    ret.liquidity_impermanent_loss_coin_b_upper_index = ret.liquidity_value_upper_index.sub(ret.liquidity_hold_coin_b_value_upper_index);
+
+
+
+
+    ret.quota_amount_a_initial = d(check_point_status.usdc_quota_in_wallet.add(check_point_status.usdc_quota_in_pos).toString());
+    ret.quota_amount_b_initial = d(check_point_status.sui_quota_in_wallet.add(check_point_status.sui_quota_in_pos).toString());
+    ret.quota_amount_a_lower_index = d(check_point_statu_after_add_liquidity.usdc_quota_in_wallet.add(new BN(ret.coin_amount_lower.coin_amount_a)).toString());
+    ret.quota_amount_b_lower_index = d(check_point_statu_after_add_liquidity.sui_quota_in_wallet.toString());
+    ret.quota_amount_a_upper_index = d(check_point_statu_after_add_liquidity.usdc_quota_in_wallet.toString());
+    ret.quota_amount_b_upper_index = d(check_point_statu_after_add_liquidity.sui_quota_in_wallet.add(new BN(ret.coin_amount_upper.coin_amount_b)).toString());
+
+
+
+    // initial price before swap, not add liquidity price
+    ret.quota_value_initial = ret.quota_amount_a_initial.mul(Decimal.pow(10, -6)).add(
+        ret.quota_amount_b_initial.mul(Decimal.pow(10, -9)).mul(check_point_status.sui_price)
+    );
+
+    ret.quota_value_lower_index = ret.quota_amount_a_lower_index.mul(Decimal.pow(10, -6)).add(
+        ret.quota_amount_b_lower_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_lower_index)
+    );
+
+    ret.quota_value_upper_index = ret.quota_amount_a_upper_index.mul(Decimal.pow(10, -6)).add(
+        ret.quota_amount_b_upper_index.mul(Decimal.pow(10, -9)).mul(ret.sui_price_upper_index)
+    );
+
+    ret.quota_hold_coin_ab_value_lower_index = ret.quota_amount_a_initial.mul(Decimal.pow(10, -6)).add(
+        ret.quota_amount_b_initial.mul(Decimal.pow(10, -9)).mul(ret.sui_price_lower_index)
+    );
+
+    ret.quota_hold_coin_ab_value_upper_index = ret.quota_amount_a_initial.mul(Decimal.pow(10, -6)).add(
+        ret.quota_amount_b_initial.mul(Decimal.pow(10, -9)).mul(ret.sui_price_upper_index)
+    );
+
+
+    ret.quota_hold_coin_a_value_lower_index = ret.quota_value_initial;
+    ret.quota_hold_coin_a_value_upper_index = ret.quota_value_initial;
+
+    let quota_coin_b_value_initial_index = ret.quota_value_initial.div(check_point_status.sui_price);
+    ret.quota_hold_coin_b_value_lower_index = quota_coin_b_value_initial_index.mul(ret.sui_price_lower_index);
+    ret.quota_hold_coin_b_value_upper_index = quota_coin_b_value_initial_index.mul(ret.sui_price_upper_index);
+
+
+    ret.quota_impermanent_loss_coin_ab_lower_index = ret.quota_value_lower_index.sub(ret.quota_hold_coin_ab_value_lower_index);
+    ret.quota_impermanent_loss_coin_ab_upper_index = ret.quota_value_upper_index.sub(ret.quota_hold_coin_ab_value_upper_index);
+    ret.quota_impermanent_loss_coin_a_lower_index = ret.quota_value_lower_index.sub(ret.quota_hold_coin_a_value_lower_index);
+    ret.quota_impermanent_loss_coin_a_upper_index = ret.quota_value_upper_index.sub(ret.quota_hold_coin_a_value_upper_index);
+    ret.quota_impermanent_loss_coin_b_lower_index = ret.quota_value_lower_index.sub(ret.quota_hold_coin_b_value_lower_index);
+    ret.quota_impermanent_loss_coin_b_upper_index = ret.quota_value_upper_index.sub(ret.quota_hold_coin_b_value_upper_index);
+
+    return ret;
+}
+
+function dumpImpermanentLossAndEarningRatio(impermanent_loss_ctx: ImpermanentLossCtx, fee_and_reward_value_lower_index: FeeAndRewardValue, fee_and_reward_value_upper_index: FeeAndRewardValue) {
+
+    console.log('impermanent_loss(liquidity, coin ab, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_ab_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_ab_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(liquidity, coin ab, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_ab_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_ab_upper_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(liquidity, coin a, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_a_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_a_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(liquidity, coin a, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_a_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_a_upper_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(liquidity, coin b, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_b_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_b_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(liquidity, coin b, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.liquidity_impermanent_loss_coin_b_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.liquidity_impermanent_loss_coin_b_upper_index).mul(100).abs().toFixed(6)
+    );
+    console.log('');
+
+
+    console.log('impermanent_loss(quota, coin ab, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_ab_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_ab_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(quota, coin ab, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_ab_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_ab_upper_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(quota, coin a, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_a_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_a_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(quota, coin a, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_a_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_a_upper_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(quota, coin b, lower_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_lower_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_b_lower_index.toFixed(6),
+        fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_b_lower_index).mul(100).abs().toFixed(6)
+    );
+
+    console.log('impermanent_loss(quota, coin b, upper_index): %s(fee_rwd) / %s(imper_los), %s%%', 
+        fee_and_reward_value_upper_index.total_value.toFixed(6),
+        impermanent_loss_ctx.quota_impermanent_loss_coin_b_upper_index.toFixed(6),
+        fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.quota_impermanent_loss_coin_b_upper_index).mul(100).abs().toFixed(6)
+    );
+}
+
+
 
 
 
@@ -942,13 +1309,13 @@ async function main() {
     console.log('Account Address: ', account_address);
 
 
+    let check_point_status_last = newCheckPointStatus();
     // get check_point_status
     let check_point_status = newCheckPointStatus();
     let wallet_balance = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
     while(true) {
         try {
-            wallet_balance = await getAllWalletBalance(account_address);            
-            break;
+            wallet_balance = await getAllWalletBalance(account_address);   
         } catch(e) {
             if (e instanceof Error) {
                 console.error('%s [error] getAllWalletBalance get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
@@ -957,13 +1324,15 @@ async function main() {
                 console.error(e);
             }
             await new Promise(f => setTimeout(f, 500));
+            continue;
         }
+        break;
     }
     check_point_status.gas_reserved = SUI_GAS_RESERVED;
     check_point_status.usdc_balance = new BN(wallet_balance.usdc_amount);
     check_point_status.sui_balance = new BN(wallet_balance.sui_amount);
     check_point_status.cetus_balance = new BN(wallet_balance.cetus_amount);
-    check_point_status.usdc_quota_in_wallet = check_point_status.usdc_balance;
+    check_point_status.usdc_quota_in_wallet = check_point_status.usdc_balance.clone();
     check_point_status.sui_quota_in_wallet = check_point_status.sui_balance.sub(check_point_status.gas_reserved);    
 
     // get price and value
@@ -971,7 +1340,6 @@ async function main() {
     while(true) {
         try {
             sui_price = await getCurrentSuiPrice();
-            break;
         } catch(e) {
             if (e instanceof Error) {
                 console.error('%s [error] getAllWalletBalance get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
@@ -980,7 +1348,9 @@ async function main() {
                 console.error(e);
             }
             await new Promise(f => setTimeout(f, 500)); 
+            continue;
         }
+        break;
     }
     check_point_status.sui_price = sui_price;
     let quota_value = calcQuotaValue(sui_price, check_point_status);
@@ -993,146 +1363,182 @@ async function main() {
     console.log('Total Quota Value: ', quota_value.total_quota_value);
     console.log('');
 
+    check_point_status_last = check_point_status;
 
 
 
 
-    // get tick
-    let pools: Pool[] | null = null;
-    while(true) {
-        try {
-            pools = await cetusClmmSDK.Pool.getAssignPools([POOL_ADDRESS_USDC_SUI_0_05]);
-            if (pools == null || pools.length <= 0) {
-                console.log('[ERROR] can not retrive pool info with getAssignPools, wait and try again...');
+
+
+
+
+
+
+    
+    let position_lower_bound_seed = 0;
+
+    let current_tick_index = 0;
+    let tick_lower_index = 0;
+    let tick_upper_index = 0;
+
+    let digest_swap = '';
+    let total_gas_fee_swap = new BN(0);
+    let balance_change_swap = newBalanceChange();    
+
+    let wallet_balance_after_swap = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
+    let check_point_status_after_swap = newCheckPointStatus();
+
+
+
+
+    let current_tick_index_after_swap = 0;
+    let tick_lower_index_after_swap = 0;
+    let tick_upper_index_after_swap = 0;
+
+    let digest_add_liquidity = '';
+    let total_gas_fee_add_liquidity = new BN(0);
+    let balance_change_add_liquidity = newBalanceChange();
+    let add_liquidity_event = newLiquidityEvent();
+
+    let wallet_balance_after_add_liquidity = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
+    let check_point_status_after_add_liquidity = newCheckPointStatus();
+
+
+    let total_gas_fee_swap_accumulate = new BN(0);
+
+
+
+    while (true) {
+        // get tick
+        let pools: Pool[] | null = null;
+        while(true) { // try best to recover
+            try {
+                pools = await cetusClmmSDK.Pool.getAssignPools([POOL_ADDRESS_USDC_SUI_0_05]);
+                if (pools == null || pools.length <= 0) {
+                    console.log('[ERROR] can not retrive pool info with getAssignPools, wait and try again...');
+                    await new Promise(f => setTimeout(f, 500));
+                    continue;
+                }
+            } catch (e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] getAssignPools get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('getAssignPools get an exception'); 
+                    console.error(e);
+                }
+                console.error('wait and try again...'); 
                 await new Promise(f => setTimeout(f, 500));
                 continue;
             }
-        } catch (e) {
-            if (e instanceof Error) {
-                console.error('%s [error] getAssignPools get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('getAssignPools get an exception'); 
-                console.error(e);
-            }
-            console.error('wait and try again...'); 
-            await new Promise(f => setTimeout(f, 500));
-            continue;
+            break;
         }
-        break;
-    }
 
-    let current_tick_index = pools[0].current_tick_index;
-    let tick_lower_index = Math.floor(current_tick_index / POSITION_TICK_RANGE) * POSITION_TICK_RANGE;
-    let tick_upper_index = tick_lower_index + POSITION_TICK_RANGE;
+        current_tick_index = pools[0].current_tick_index;
+        tick_lower_index = 0;
+        tick_upper_index = 0;
 
-    console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);    
-    if (current_tick_index === tick_lower_index || current_tick_index === tick_upper_index) {
-        console.log('current_tick_index at border, exit');
-        return;
-    }
-    console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
-    if (current_tick_index === tick_lower_index || current_tick_index === tick_upper_index) {
-        console.log('current_tick_index at border, exit');
-        return;
-    }
+        let tick_spacing_lower_index = Math.floor(current_tick_index / POOL_TICK_SPACING_USDC_SUI_0_05) * POOL_TICK_SPACING_USDC_SUI_0_05;
+        let tick_spacing_upper_index = tick_spacing_lower_index + POOL_TICK_SPACING_USDC_SUI_0_05;
+        let tick_lower_side = (tick_spacing_upper_index - current_tick_index) > (current_tick_index - tick_spacing_lower_index); // [tick_lower_index, tick_middle)
 
+        if (POOL_TICK_SPACING_TIMES % 2) { // odd
+            tick_lower_index = tick_spacing_lower_index - Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
+            tick_upper_index = tick_spacing_upper_index + Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
+        } else { // even
+            tick_lower_index = (tick_lower_side? tick_spacing_lower_index : tick_spacing_upper_index) - Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
+            tick_upper_index = (tick_lower_side? tick_spacing_lower_index : tick_spacing_upper_index) + Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
+        }
 
+        position_lower_bound_seed = tick_lower_index;
 
-    // let current_tick_index = pools[0].current_tick_index;
-    // let tick_lower_index = 0;
-    // let tick_upper_index = 0;
-
-    // let tick_spacing_lower_index = Math.floor(current_tick_index / POOL_TICK_SPACING_USDC_SUI_0_05) * POOL_TICK_SPACING_USDC_SUI_0_05;
-    // let tick_spacing_upper_index = tick_spacing_lower_index + POOL_TICK_SPACING_USDC_SUI_0_05;
-    // let tick_lower_side = (tick_spacing_upper_index - current_tick_index) > (current_tick_index - tick_spacing_lower_index); // [tick_lower_index, tick_middle)
-
-    // if (POOL_TICK_SPACING_TIMES % 2) { // odd
-    //     tick_lower_index = tick_spacing_lower_index - Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
-    //     tick_upper_index = tick_spacing_upper_index + Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
-    // } else { // even
-    //     tick_lower_index = (tick_lower_side? tick_spacing_lower_index : tick_spacing_upper_index) - Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
-    //     tick_upper_index = (tick_lower_side? tick_spacing_lower_index : tick_spacing_upper_index) + Math.floor(POOL_TICK_SPACING_TIMES / 2) * POOL_TICK_SPACING_USDC_SUI_0_05;
-    // }
-
-    // let position_lower_bound_seed = tick_lower_index;
-
-    // console.log('Pool Tick Spacing: %d - (%d) - %d', tick_spacing_lower_index, current_tick_index, tick_spacing_upper_index);  
-    // console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
-    // console.log('position_lower_bound_seed: ', position_lower_bound_seed);
-    // if (current_tick_index === tick_lower_index || current_tick_index === tick_upper_index) {
-    //     // when POOL_TICK_SPACING_TIMES == 1
-    //     console.log('current_tick_index at border, exit');
-    //     return;
-    // }
+        console.log('Pool Tick Spacing: %d - (%d) - %d', tick_spacing_lower_index, current_tick_index, tick_spacing_upper_index);  
+        console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
+        console.log('position_lower_bound_seed: ', position_lower_bound_seed);
+        if (current_tick_index === tick_lower_index || current_tick_index === tick_upper_index) {
+            // when POOL_TICK_SPACING_TIMES == 1
+            console.log('current_tick_index at border, exit');
+            return;
+        }
 
 
 
 
-    // rebalance
-    const rebalance_info = getRebalanceDirectionAndAmount(check_point_status.usdc_quota_in_wallet, check_point_status.sui_quota_in_wallet , current_tick_index, tick_lower_index, tick_upper_index);
-    date.setTime(Date.now())
-    console.log('')
-    console.log('[%s] - getRebalanceDirectionAndAmount - ', date.toLocaleString());
-    console.log('rebalance_info.valid', rebalance_info.valid);
-    console.log('rebalance_info.need_swap', rebalance_info.need_swap);
-    console.log('rebalance_info.a2b', rebalance_info.a2b);    
-    console.log('rebalance_info.amount_in', rebalance_info.amount_in.toString())
-    console.log('rebalance_info.amount_out', rebalance_info.amount_out.toString())
-    console.log('rebalance_info.coin_a_amount_new', rebalance_info.coin_a_amount_new.toString())
-    console.log('rebalance_info.coin_b_amount_new', rebalance_info.coin_b_amount_new.toString())
-    console.log('')
+        // rebalance
+        const rebalance_info = getRebalanceDirectionAndAmount(check_point_status_last.usdc_quota_in_wallet, check_point_status_last.sui_quota_in_wallet , current_tick_index, tick_lower_index, tick_upper_index);
+        date.setTime(Date.now())
+        console.log('')
+        console.log('[%s] - getRebalanceDirectionAndAmount - ', date.toLocaleString());
+        console.log('rebalance_info.valid', rebalance_info.valid);
+        console.log('rebalance_info.need_swap', rebalance_info.need_swap);
+        console.log('rebalance_info.a2b', rebalance_info.a2b);    
+        console.log('rebalance_info.amount_in', rebalance_info.amount_in.toString())
+        console.log('rebalance_info.amount_out', rebalance_info.amount_out.toString())
+        console.log('rebalance_info.coin_a_amount_new', rebalance_info.coin_a_amount_new.toString())
+        console.log('rebalance_info.coin_b_amount_new', rebalance_info.coin_b_amount_new.toString())
+        console.log('')
 
-   
-
-
-
-    // perform swap
-    let digest_swap = '';
-    let total_gas_fee_swap = new BN(0);
-    let balance_change_swap: BalanceChange = {
-        usdc_change: new BN(0),
-        sui_change: new BN(0),
-        cetus_change: new BN(0)
-    };
     
-    if (rebalance_info.valid && rebalance_info.need_swap) {
-        while (true) {
-            try {
-                const routers = await client.findRouters({
-                    from: rebalance_info.a2b ? COIN_TYPE_ADDRESS_USDC : COIN_TYPE_ADDRESS_SUI,
-                    target: rebalance_info.a2b ? COIN_TYPE_ADDRESS_SUI : COIN_TYPE_ADDRESS_USDC,
-                    amount: rebalance_info.amount_in,
-                    byAmountIn: true // `true` means fix input amount, `false` means fix output amount
-                });
 
-                if (routers == null) {
-                    console.log('[error] Swap: client.findRouter return null, wait 2s and try again...'); 
+
+
+        // perform swap       
+        digest_swap = '';
+        total_gas_fee_swap = new BN(0);
+        balance_change_swap = newBalanceChange();
+        if (rebalance_info.valid && rebalance_info.need_swap) {
+            let txb = new Transaction();
+            while (true) { // try best to recover
+                try {
+                    const routers = await client.findRouters({
+                        from: rebalance_info.a2b ? COIN_TYPE_ADDRESS_USDC : COIN_TYPE_ADDRESS_SUI,
+                        target: rebalance_info.a2b ? COIN_TYPE_ADDRESS_SUI : COIN_TYPE_ADDRESS_USDC,
+                        amount: rebalance_info.amount_in,
+                        byAmountIn: true // `true` means fix input amount, `false` means fix output amount
+                    });
+
+                    if (routers == null) {
+                        console.log('[error] Swap: client.findRouter return null, wait 2s and try again...'); 
+                        await new Promise(f => setTimeout(f, 2000));
+                        continue;
+                    }
+
+                    dumpSDKRet2Logfile('Swap:findRouters', JSON.stringify(routers, null, 2));
+                    console.log('[%s] - client.findRouters: %s - ', date.toLocaleString(), routers ? 'Not return null' : 'Return null');
+
+                    client.signer = account_address;
+                    await client.fastRouterSwap({
+                        routers,
+                        txb,
+                        slippage: 0.01,
+                    });
+
+                    const result = await client.devInspectTransactionBlock(txb);
+                    dumpSDKRet2Logfile('Swap: devInspectTransactionBlock', JSON.stringify(result, null, 2));
+                    console.log('[%s] - client.devInspectTransactionBlock: %s - ', date.toLocaleString(), result.effects.status.status);
+
+                    if (result.effects.status.status !== "success") {
+                        console.log('[error] Swap: client.devInspectTransactionBlock return failed, continue ,do not wait'); 
+                        // await new Promise(f => setTimeout(f, 2000));
+                        // continue;
+                    }               
+
+                } catch (e) {
+                    if (e instanceof Error) {
+                        console.error('%s [error] Aggregator Swap get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                    } else {
+                        console.error('[error] Aggregator Swap get an exception'); 
+                        console.error(e);
+                    }
+                    console.error('wait 2s and try again...'); 
                     await new Promise(f => setTimeout(f, 2000));
                     continue;
                 }
+                break;
+            }
 
-                dumpSDKRet2Logfile('Swap:findRouters', JSON.stringify(routers, null, 2));
-                console.log('[%s] - client.findRouters: %s - ', date.toLocaleString(), routers ? 'Not return null' : 'Return null');
-
-                client.signer = account_address;
-                const txb = new Transaction();
-                await client.fastRouterSwap({
-                    routers,
-                    txb,
-                    slippage: 0.01,
-                });
-
-                const result = await client.devInspectTransactionBlock(txb);
-                dumpSDKRet2Logfile('Swap: devInspectTransactionBlock', JSON.stringify(result, null, 2));
-                console.log('[%s] - client.devInspectTransactionBlock: %s - ', date.toLocaleString(), result.effects.status.status);
-
-                if (result.effects.status.status !== "success") {
-                    console.log('[error] Swap: client.devInspectTransactionBlock return failed, continue ,do not wait'); 
-                    // await new Promise(f => setTimeout(f, 2000));
-                    // continue;
-                }
-
+            try { // can not recover, process from the begining
                 const signAndExecuteResult = await client.signAndExecuteTransaction(txb, sendKeypair);
+                // const signAndExecuteResult = await client.sendTransaction(txb, sendKeypair);
                 dumpSDKRet2Logfile('Swap: signAndExecuteTransaction', JSON.stringify(signAndExecuteResult, null, 2));
                 console.log('[%s] - client.signAndExecuteTransaction: %s - ', date.toLocaleString(), signAndExecuteResult.effects?.status.status);
 
@@ -1143,8 +1549,6 @@ async function main() {
                 }
                 
                 digest_swap = signAndExecuteResult.digest;
-                // total_gas_fee_swap = getTotalGasFee(signAndExecuteResult);
-                // balance_change_swap = getBalanceChange(signAndExecuteResult);
 
             } catch (e) {
                 if (e instanceof Error) {
@@ -1157,136 +1561,138 @@ async function main() {
                 await new Promise(f => setTimeout(f, 2000));
                 continue;
             }
-            break;
         }
 
-    }
-
-    while (true) {
-        try {
-            const tx_rsp = await cetusClmmSDK.FullClient.getTransactionBlock({
-                digest: digest_swap, 
-                options: {
-                    showBalanceChanges: true,
-                    showEffects: true,
-                    showEvents: true
-                    // showInput: true,
-                    // showObjectChanges: true,
-                    // showRawEffects: true,
-                    // showRawInput:true
+        // get swap tx rsp
+        while (true) { // try best to recover
+            try {
+                const tx_rsp = await cetusClmmSDK.FullClient.getTransactionBlock({
+                    digest: digest_swap, 
+                    options: {
+                        showBalanceChanges: true,
+                        showEffects: true,
+                        showEvents: true
+                        // showInput: true,
+                        // showObjectChanges: true,
+                        // showRawEffects: true,
+                        // showRawInput:true
+                    }
+                });
+                if (tx_rsp.effects?.status.status !== 'success') {
+                    console.log('[error] Aggregator Swap: cetusClmmSDK.FullClient.getTransactionBlock return failed, wait 2s and try again...');
+                    await new Promise(f => setTimeout(f, 2000));
+                    continue;
                 }
-            });
-            if (tx_rsp.effects?.status.status !== 'success') {
-                console.log('[error] Aggregator Swap: cetusClmmSDK.FullClient.getTransactionBlock return failed, wait 2s and try again...');
+                total_gas_fee_swap = getTotalGasFee(tx_rsp); // iadd to accumulate if later part fail
+                balance_change_swap = getBalanceChange(tx_rsp);
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] Aggregator Swap getTransactionBlock get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('[error] Aggregator Swap getTransactionBlock get an exception'); 
+                    console.error(e);
+                }
+                console.error('wait 2s and try again...'); 
                 await new Promise(f => setTimeout(f, 2000));
                 continue;
             }
-            total_gas_fee_swap = getTotalGasFee(tx_rsp);
-            balance_change_swap = getBalanceChange(tx_rsp);
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] Aggregator Swap getTransactionBlock get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('[error] Aggregator Swap getTransactionBlock get an exception'); 
-                console.error(e);
-            }
-            console.error('wait 2s and try again...'); 
-            await new Promise(f => setTimeout(f, 2000));
-            continue;
+            break;
         }
-        break;
-    }
 
-    console.log('')
-    console.log('- Aggregator Swap Transaction Rsp - ');
-    console.log('digest_swap: ', digest_swap);
+        total_gas_fee_swap_accumulate.iadd(total_gas_fee_swap);
 
-    console.log('total_gas_fee_swap: ', total_gas_fee_swap.toString());
+        console.log('')
+        console.log('- Aggregator Swap Transaction Rsp - ');
+        console.log('digest_swap: ', digest_swap);
 
-    console.log('balance_change_swap.usdc_change: ', balance_change_swap.usdc_change.toString());
-    console.log('balance_change_swap.sui_change: ', balance_change_swap.sui_change.toString());
-    console.log('balance_change_swap.cetus_change: ', balance_change_swap.cetus_change.toString());
-    console.log('')
+        console.log('total_gas_fee_swap: ', total_gas_fee_swap.toString());
+        console.log('total_gas_fee_swap_accumulate: ', total_gas_fee_swap_accumulate.toString());
 
-
-
+        console.log('balance_change_swap.usdc_change: ', balance_change_swap.usdc_change.toString());
+        console.log('balance_change_swap.sui_change: ', balance_change_swap.sui_change.toString());
+        console.log('balance_change_swap.cetus_change: ', balance_change_swap.cetus_change.toString());
+        console.log('')
 
 
-    let wallet_balance_after_swap = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
-    while(true) {
-        try {
-            wallet_balance_after_swap = await getAllWalletBalance(account_address);
-            // wait for wallet balance updated.
-            while (balanceNotChange(wallet_balance, wallet_balance_after_swap)) {
-                date.setTime(Date.now());
-                console.log('[%s][WARNING] balanceNotChange, wait 1 second... ', date.toLocaleString());
-                await new Promise(f => setTimeout(f, 1000));
+
+
+
+        wallet_balance_after_swap = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
+        while(true) { // try best to recover
+            try {
                 wallet_balance_after_swap = await getAllWalletBalance(account_address);
+                // wait for wallet balance updated.
+                while (balanceNotChange(wallet_balance, wallet_balance_after_swap)) {
+                    date.setTime(Date.now());
+                    console.log('[%s][WARNING] balanceNotChange, wait 1 second... ', date.toLocaleString());
+                    await new Promise(f => setTimeout(f, 1000));
+                    wallet_balance_after_swap = await getAllWalletBalance(account_address);
+                }
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] wait for wallet balance updated get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('wait for wallet balance updated get an exception'); 
+                    console.error(e);
+                }
+                await new Promise(f => setTimeout(f, 100)); // 0.1s
+                continue;
             }
             break;
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] wait for wallet balance updated get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('wait for wallet balance updated get an exception'); 
-                console.error(e);
-            }
-            await new Promise(f => setTimeout(f, 100)); // 0.1s
         }
-    }
 
 
 
-    // get check_point_status
-    let check_point_status_after_swap = newCheckPointStatus();
-    check_point_status_after_swap.gas_reserved = SUI_GAS_RESERVED.sub(total_gas_fee_swap);
-    check_point_status_after_swap.usdc_balance = new BN(wallet_balance_after_swap.usdc_amount);
-    check_point_status_after_swap.sui_balance = new BN(wallet_balance_after_swap.sui_amount);
-    check_point_status_after_swap.cetus_balance = new BN(wallet_balance_after_swap.cetus_amount);
-    check_point_status_after_swap.usdc_quota_in_wallet = check_point_status_after_swap.usdc_balance;
-    check_point_status_after_swap.sui_quota_in_wallet = check_point_status_after_swap.sui_balance.sub(check_point_status_after_swap.gas_reserved); 
+        // get check_point_status
+        check_point_status_after_swap = newCheckPointStatus();
+        check_point_status_after_swap.gas_reserved = SUI_GAS_RESERVED.sub(total_gas_fee_swap_accumulate);
+        check_point_status_after_swap.usdc_balance = new BN(wallet_balance_after_swap.usdc_amount);
+        check_point_status_after_swap.sui_balance = new BN(wallet_balance_after_swap.sui_amount);
+        check_point_status_after_swap.cetus_balance = new BN(wallet_balance_after_swap.cetus_amount);
+        check_point_status_after_swap.usdc_quota_in_wallet = check_point_status_after_swap.usdc_balance.clone();
+        check_point_status_after_swap.sui_quota_in_wallet = check_point_status_after_swap.sui_balance.sub(check_point_status_after_swap.gas_reserved); 
 
-    // get price and value
-    let sui_price_after_swap = d(0);
-    while(true) {
-        try {
-            sui_price_after_swap = await getCurrentSuiPrice();
+        // get price and value
+        let sui_price_after_swap = d(0);
+        while(true) { // try best to recover
+            try {
+                sui_price_after_swap = await getCurrentSuiPrice();
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] getCurrentSuiPrice get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('getCurrentSuiPrice get an exception'); 
+                    console.error(e);
+                }
+                await new Promise(f => setTimeout(f, 100)); // 0.1s
+                continue;
+            }
             break;
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] getCurrentSuiPrice get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('getCurrentSuiPrice get an exception'); 
-                console.error(e);
-            }
-            await new Promise(f => setTimeout(f, 100)); // 0.1s
         }
-    }
-    check_point_status_after_swap.sui_price = sui_price_after_swap;
-    let quota_value_after_swap = calcQuotaValue(sui_price_after_swap, check_point_status_after_swap);
+        check_point_status_after_swap.sui_price = sui_price_after_swap;
+        let quota_value_after_swap = calcQuotaValue(sui_price_after_swap, check_point_status_after_swap);
 
-    // print
-    console.log('');
-    console.log(' - Check Point : After Swap - ');
-    dumpCheckPoint(check_point_status_after_swap);
-    console.log('Total Quota Value: ', quota_value_after_swap.total_quota_value);
-    console.log('');
-
-
-    // dump transaction statistics
-    dumpTransactionInfo('Swap Transaction Info', check_point_status, check_point_status_after_swap, 
-        sui_price_after_swap, digest_swap, total_gas_fee_swap, balance_change_swap);
+        // print
+        console.log('');
+        console.log(' - Check Point : After Swap - ');
+        dumpCheckPoint(check_point_status_after_swap);
+        console.log('Total Quota Value: ', quota_value_after_swap.total_quota_value);
+        console.log('');       
 
 
-    console.log('');
-    console.log('');
+        // dump transaction statistics
+        dumpTransactionInfo('Swap Transaction Info', check_point_status_last, check_point_status_after_swap, 
+            sui_price_after_swap, digest_swap, total_gas_fee_swap, balance_change_swap);
 
-    
-
-    
-
+        check_point_status_last = {...check_point_status_after_swap};
 
 
+        console.log('');
+        console.log('');
+
+        
+
+        
 
 
 
@@ -1307,118 +1713,86 @@ async function main() {
 
 
 
-    console.log('\n');
 
-    // get new pool status for add liquidity
-    let pools_after_swap: Pool[] | null = null;
-    while(true) {
-        try {
-            pools_after_swap = await cetusClmmSDK.Pool.getAssignPools([POOL_ADDRESS_USDC_SUI_0_05]);
-            if (pools_after_swap == null || pools_after_swap.length <= 0) {
-                console.log('[ERROR] can not retrive pool info with getAssignPools, wait and try again...');
+
+
+        console.log('\n');
+
+        // get new pool status for add liquidity
+        let pools_after_swap: Pool[] | null = null;
+        while(true) { // try best to recover
+            try {
+                pools_after_swap = await cetusClmmSDK.Pool.getAssignPools([POOL_ADDRESS_USDC_SUI_0_05]);
+                if (pools_after_swap == null || pools_after_swap.length <= 0) {
+                    console.log('[ERROR] can not retrive pool info with getAssignPools, wait and try again...');
+                    await new Promise(f => setTimeout(f, 500));
+                    continue;
+                }
+            } catch (e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] getAssignPools get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('getAssignPools get an exception'); 
+                    console.error(e);
+                }
+                console.error('wait and try again...'); 
                 await new Promise(f => setTimeout(f, 500));
                 continue;
             }
-        } catch (e) {
-            if (e instanceof Error) {
-                console.error('%s [error] getAssignPools get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('getAssignPools get an exception'); 
-                console.error(e);
-            }
-            console.error('wait and try again...'); 
-            await new Promise(f => setTimeout(f, 500));
-            continue;
+            break;
         }
-        break;
-    }
-    
-    // const pools_after_swap = await cetusClmmSDK.Pool.getAssignPools([POOL_ADDRESS_USDC_SUI_0_05]);
-    // if (pools_after_swap.length <= 0) {
-    //     console.log('[ERROR] Cannot retrieve pools info)');
-    //     return;
-    // }
-
-    let current_tick_index_after_swap: number = pools_after_swap[0].current_tick_index;
-    let tick_lower_index_after_swap: number = Math.floor(current_tick_index_after_swap / POSITION_TICK_RANGE) * POSITION_TICK_RANGE;
-    let tick_upper_index_after_swap: number = tick_lower_index_after_swap + POSITION_TICK_RANGE;
-
-    console.log('Pool Tick Status before: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
-    console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index_after_swap, current_tick_index_after_swap, tick_upper_index_after_swap);
-
-    if (tick_lower_index_after_swap != tick_lower_index || tick_upper_index_after_swap != tick_upper_index) {
-        console.log('[ERROR] position has switched, quit!');
-        return;
-    }
-
-    if (Decimal(current_tick_index_after_swap - current_tick_index).abs().gte(10)) {
-        console.log('[WARNING] current_tick_index change more than 10 tick');
-    }
-
-
-
-
-
-
-
-
-
-
-
-    // try to decide fix_amount_a, amount_a,amount_b for add liquidity
-
-    let fix_amount_a = false;
-    let coin_amount = new BN(0);
-    const slippage_for_add_liquidity = 0.2;
-    let cur_sqrt_price = TickMath.tickIndexToSqrtPriceX64(current_tick_index_after_swap);
-
-    let total_usdc_slippage = new BN(d(check_point_status_after_swap.usdc_quota_in_wallet.toString()).mul(slippage_for_add_liquidity).round().toString());
-    let total_sui_slippage = new BN(d(check_point_status_after_swap.sui_quota_in_wallet.toString()).mul(slippage_for_add_liquidity).round().toString());
-
-    // discount slippage_for_add_liquidity per side, to meet huge change of position coin ratio
-    let total_usdc_amount_after_swap_for_slippage = check_point_status_after_swap.usdc_quota_in_wallet.sub(total_usdc_slippage);
-    let total_sui_amount_after_swap_for_slippage = check_point_status_after_swap.sui_quota_in_wallet.sub(total_sui_slippage);
-
-
-    console.log('check_point_status_after_swap.usdc_quota_in_wallet : %s, total_usdc_amount_after_swap_for_slippage: %s', 
-        check_point_status_after_swap.usdc_quota_in_wallet.toString(), total_usdc_amount_after_swap_for_slippage.toString());
-    console.log('check_point_status_after_swap.sui_quota_in_wallet : %s, total_sui_amount_after_swap_for_slippage: %s', 
-        check_point_status_after_swap.sui_quota_in_wallet.toString(), total_sui_amount_after_swap_for_slippage.toString());
-    
-
-    // try fix coin a
-    fix_amount_a = true;
-    coin_amount = total_usdc_amount_after_swap_for_slippage.clone();
-    let liquidity_input = ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(
-        tick_lower_index_after_swap,
-        tick_upper_index_after_swap,
-        coin_amount,
-        fix_amount_a,
-        true,
-        slippage_for_add_liquidity,
-        cur_sqrt_price
-    )
-
-    console.log('');
-    console.log(' - ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts: try fix a - ');
-    console.log('liquidity_input.coin_amount_a: ', liquidity_input.coin_amount_a);
-    console.log('liquidity_input.coin_amount_b: ', liquidity_input.coin_amount_b);
-    console.log('liquidity_input.coin_amount_limit_a: ', liquidity_input.coin_amount_limit_a);
-    console.log('liquidity_input.coin_amount_limit_b: ', liquidity_input.coin_amount_limit_b);
-    console.log('liquidity_input.fix_amount_a: ', liquidity_input.fix_amount_a);
-    console.log('liquidity_input.liquidity_amount: ', liquidity_input.liquidity_amount);
-    console.log('');
-
-    if (check_point_status_after_swap.sui_quota_in_wallet.lt(new BN(liquidity_input.coin_amount_limit_b))) {
-        console.log('coin b remain(%s) is insuffcient for required - iquidity_input.coin_amount_limit_b(%s)', 
-            check_point_status_after_swap.sui_quota_in_wallet.toString(), liquidity_input.coin_amount_limit_b);
-
         
-        // try fix coin b
-        fix_amount_a = false;
-        coin_amount = total_sui_amount_after_swap_for_slippage.clone();
 
-        liquidity_input = ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(
+        current_tick_index_after_swap = pools_after_swap[0].current_tick_index;
+        tick_lower_index_after_swap = position_lower_bound_seed + Math.floor((current_tick_index_after_swap - position_lower_bound_seed) / POSITION_TICK_RANGE) * POSITION_TICK_RANGE;
+        tick_upper_index_after_swap = tick_lower_index_after_swap + POSITION_TICK_RANGE;
+
+        console.log('Pool Tick Status init: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
+        console.log('Pool Tick Status: %d - (%d) - %d', tick_lower_index_after_swap, current_tick_index_after_swap, tick_upper_index_after_swap);
+
+        if (tick_lower_index_after_swap != tick_lower_index || tick_upper_index_after_swap != tick_upper_index) {
+            console.log('[ERROR] position has switched, quit!');
+            return;
+        }
+
+        if (Decimal(current_tick_index_after_swap - current_tick_index).abs().gte(10)) {
+            console.log('[WARNING] current_tick_index change more than 10 tick');
+        }
+
+
+
+
+
+
+
+
+
+
+
+        // try to decide fix_amount_a, amount_a,amount_b for add liquidity
+
+        let fix_amount_a = false;
+        let coin_amount = new BN(0);
+        const slippage_for_add_liquidity = 0.04;
+        let cur_sqrt_price = TickMath.tickIndexToSqrtPriceX64(current_tick_index_after_swap);
+
+        let total_usdc_slippage = new BN(d(check_point_status_after_swap.usdc_quota_in_wallet.toString()).mul(slippage_for_add_liquidity).round().toString());
+        let total_sui_slippage = new BN(d(check_point_status_after_swap.sui_quota_in_wallet.toString()).mul(slippage_for_add_liquidity).round().toString());
+
+        // discount slippage_for_add_liquidity per side, to meet huge change of position coin ratio
+        let total_usdc_amount_after_swap_for_slippage = check_point_status_after_swap.usdc_quota_in_wallet.sub(total_usdc_slippage);
+        let total_sui_amount_after_swap_for_slippage = check_point_status_after_swap.sui_quota_in_wallet.sub(total_sui_slippage);
+        
+        console.log('')
+        console.log(' - estLiquidityAndCoinAmountFromOneAmounts - ')
+        console.log(' Coin A Amount in Wallet %s * (1 - slippage) = Amount used for est %s ', check_point_status_after_swap.usdc_quota_in_wallet.toString(), total_usdc_amount_after_swap_for_slippage.toString(), );
+        console.log(' Coin B Amount in Wallet %s * (1 - slippage) = Amount used for est %s', check_point_status_after_swap.sui_quota_in_wallet.toString(), total_sui_amount_after_swap_for_slippage.toString());
+        
+
+        // try fix coin a
+        fix_amount_a = true;
+        coin_amount = total_usdc_amount_after_swap_for_slippage.clone();
+        let liquidity_input = ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(
             tick_lower_index_after_swap,
             tick_upper_index_after_swap,
             coin_amount,
@@ -1428,40 +1802,66 @@ async function main() {
             cur_sqrt_price
         )
 
-        console.log('');
-        console.log(' - ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts: try fix b - ');
+        console.log(' - ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(try fix Coin A): return - ');
         console.log('liquidity_input.coin_amount_a: ', liquidity_input.coin_amount_a);
         console.log('liquidity_input.coin_amount_b: ', liquidity_input.coin_amount_b);
         console.log('liquidity_input.coin_amount_limit_a: ', liquidity_input.coin_amount_limit_a);
         console.log('liquidity_input.coin_amount_limit_b: ', liquidity_input.coin_amount_limit_b);
         console.log('liquidity_input.fix_amount_a: ', liquidity_input.fix_amount_a);
-        console.log('liquidity_input.liquidity_amount: ', liquidity_input.liquidity_amount);
-        console.log('');
-        if (check_point_status_after_swap.usdc_quota_in_wallet.lt(new BN(liquidity_input.coin_amount_limit_a))) {
-            console.log('coin a remain(%s) is insuffcient for required - iquidity_input.coin_amount_limit_a(%s)', 
-                        check_point_status_after_swap.usdc_quota_in_wallet.toString(), liquidity_input.coin_amount_limit_a);
-            console.log('[ERROR] The remain coin cannot meet the required for add liquidity, pls rebalance again. Exit');
+        console.log('liquidity_input.liquidity_amount: ', liquidity_input.liquidity_amount);       
+
+        if (check_point_status_after_swap.sui_quota_in_wallet.lt(new BN(liquidity_input.coin_amount_limit_b))) {
+            console.log('coin b remain(%s) is insuffcient for required - iquidity_input.coin_amount_limit_b(%s)', 
+                check_point_status_after_swap.sui_quota_in_wallet.toString(), liquidity_input.coin_amount_limit_b);
+
+            
+            // try fix coin b
+            fix_amount_a = false;
+            coin_amount = total_sui_amount_after_swap_for_slippage.clone();
+
+            liquidity_input = ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(
+                tick_lower_index_after_swap,
+                tick_upper_index_after_swap,
+                coin_amount,
+                fix_amount_a,
+                true,
+                slippage_for_add_liquidity,
+                cur_sqrt_price
+            )
+
+            console.log(' - ClmmPoolUtil.estLiquidityAndCoinAmountFromOneAmounts(try fix Coin B): return - ');
+            console.log('liquidity_input.coin_amount_a: ', liquidity_input.coin_amount_a);
+            console.log('liquidity_input.coin_amount_b: ', liquidity_input.coin_amount_b);
+            console.log('liquidity_input.coin_amount_limit_a: ', liquidity_input.coin_amount_limit_a);
+            console.log('liquidity_input.coin_amount_limit_b: ', liquidity_input.coin_amount_limit_b);
+            console.log('liquidity_input.fix_amount_a: ', liquidity_input.fix_amount_a);
+            console.log('liquidity_input.liquidity_amount: ', liquidity_input.liquidity_amount);
+
+            if (check_point_status_after_swap.usdc_quota_in_wallet.lt(new BN(liquidity_input.coin_amount_limit_a))) {
+                console.log('coin a remain(%s) is insuffcient for required - iquidity_input.coin_amount_limit_a(%s)', 
+                            check_point_status_after_swap.usdc_quota_in_wallet.toString(), liquidity_input.coin_amount_limit_a);
+                console.log('[ERROR] The remain coin cannot meet the required for add liquidity, pls rebalance again. Exit');
+                return;
+            }
+        }
+
+        const amount_a = fix_amount_a ? coin_amount : new BN(liquidity_input.coin_amount_limit_a);
+        const amount_b = fix_amount_a ? new BN(liquidity_input.coin_amount_limit_b) : coin_amount;
+
+
+        console.log(' - est result used for add liquidity - ');
+        console.log('slippage_for_add_liquidity: ', slippage_for_add_liquidity);
+        console.log('fix_amount_a: ', fix_amount_a);
+        console.log('amount_a for add liquidity: ', amount_a.toString());
+        console.log('amount_b for add liquidity: ', amount_b.toString());
+        console.log('')
+
+        if (amount_a.gte(check_point_status_after_swap.usdc_quota_in_wallet) || amount_b.gte(check_point_status_after_swap.sui_quota_in_wallet)) {
+            console.log('[ERROR] amount_a / b greater than amount after swap, quit!');        
             return;
         }
-    }
 
-
-    console.log('fix_amount_a: ', fix_amount_a);
-    console.log('coin_amount: ', coin_amount.toString());
-    console.log('slippage_for_add_liquidity: ', slippage_for_add_liquidity);
-
-    const amount_a = fix_amount_a ? coin_amount : new BN(liquidity_input.coin_amount_limit_a);
-    const amount_b = fix_amount_a ? new BN(liquidity_input.coin_amount_limit_b) : coin_amount;    
-    
-    console.log('amount_a for add liquidity: ', amount_a.toString());
-    console.log('amount_b for add liquidity: ', amount_b.toString());
-
-    if (amount_a.gte(check_point_status_after_swap.usdc_quota_in_wallet) || amount_b.gte(check_point_status_after_swap.sui_quota_in_wallet)) {
-        console.log('[ERROR] amount_a / b greater than amount after swap, quit!');        
-        return;
-    }
-
-    
+        
 
 
 
@@ -1474,35 +1874,31 @@ async function main() {
 
 
 
-    // perform add liquidity
-    let digest_add_liquidity = '';
-    let total_gas_fee_add_liquidity = new BN(0);
-    let balance_change_add_liquidity: BalanceChange = {
-        usdc_change: new BN(0),
-        sui_change: new BN(0),
-        cetus_change: new BN(0)
-    };
-    let add_liquidity_event = newLiquidityEvent();
+        // perform add liquidity
+        digest_add_liquidity = '';
+        total_gas_fee_add_liquidity = new BN(0);
+        balance_change_add_liquidity = newBalanceChange();
+        add_liquidity_event = newLiquidityEvent();
 
-    const add_liquidity_payload_params: AddLiquidityFixTokenParams = {
-        coin_type_a: pools_after_swap[0].coin_type_a,
-        coin_type_b: pools_after_swap[0].coin_type_b,
-        pool_id: pools_after_swap[0].id,
-        tick_lower: tick_lower_index_after_swap,
-        tick_upper: tick_upper_index_after_swap,
-        fix_amount_a,
-        amount_a: amount_a.toString(),
-        amount_b: amount_b.toString(),
-        slippage: slippage_for_add_liquidity,
-        is_open: true,
-        pos_id: '',
-        rewarder_coin_types: [],
-        collect_fee: false,
-    }
+        const add_liquidity_payload_params: AddLiquidityFixTokenParams = {
+            coin_type_a: pools_after_swap[0].coin_type_a,
+            coin_type_b: pools_after_swap[0].coin_type_b,
+            pool_id: pools_after_swap[0].id,
+            tick_lower: tick_lower_index_after_swap,
+            tick_upper: tick_upper_index_after_swap,
+            fix_amount_a,
+            amount_a: amount_a.toString(),
+            amount_b: amount_b.toString(),
+            slippage: slippage_for_add_liquidity,
+            is_open: true,
+            pos_id: '',
+            rewarder_coin_types: [],
+            collect_fee: false,
+        }
 
 
-    while (true) {
-        try {
+
+        try { // can not recover, process from the begining again
             const add_liquidity_payload = await cetusClmmSDK.Position.createAddLiquidityFixTokenPayload(add_liquidity_payload_params);
             dumpSDKRet2Logfile('Add Liquidity: cetusClmmSDK.Position.createAddLiquidityFixTokenPayload', JSON.stringify(add_liquidity_payload, null, 2));
             console.log('[%s] - cetusClmmSDK.Position.createAddLiquidityFixTokenPayload - ', date.toLocaleString());
@@ -1517,10 +1913,6 @@ async function main() {
                 continue;
             }
             digest_add_liquidity = transfer_txn.digest;
-            // total_gas_fee_add_liquidity = getTotalGasFee(transfer_txn);
-            // balance_change_add_liquidity = getBalanceChange(transfer_txn);
-            // add_liquidity_event = getAddLiquidityEvent(transfer_txn);
-
         } catch (e) {
             if (e instanceof Error) {
                 console.error('%s [error] Add Liquidity get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
@@ -1532,151 +1924,161 @@ async function main() {
             await new Promise(f => setTimeout(f, 2000));
             continue;
         }
-        break;
-    }
 
-    while (true) {
-        try {
-            const tx_rsp = await cetusClmmSDK.FullClient.getTransactionBlock({
-                digest: digest_add_liquidity, 
-                options: {
-                    showBalanceChanges: true,
-                    showEffects: true,
-                    showEvents: true
-                    // showInput: true,
-                    // showObjectChanges: true,
-                    // showRawEffects: true,
-                    // showRawInput:true
+        while (true) { // try best to recover
+            try {
+                const tx_rsp = await cetusClmmSDK.FullClient.getTransactionBlock({
+                    digest: digest_add_liquidity, 
+                    options: {
+                        showBalanceChanges: true,
+                        showEffects: true,
+                        showEvents: true
+                        // showInput: true,
+                        // showObjectChanges: true,
+                        // showRawEffects: true,
+                        // showRawInput:true
+                    }
+                });
+                if (tx_rsp.effects?.status.status !== 'success') {
+                    console.log('[error] Add Liquidity: cetusClmmSDK.FullClient.getTransactionBlock return failed, wait 2s and try again...');
+                    await new Promise(f => setTimeout(f, 2000));
+                    continue;
                 }
-            });
-            if (tx_rsp.effects?.status.status !== 'success') {
-                console.log('[error] Add Liquidity: cetusClmmSDK.FullClient.getTransactionBlock return failed, wait 2s and try again...');
+
+                total_gas_fee_add_liquidity = getTotalGasFee(tx_rsp);
+                balance_change_add_liquidity = getBalanceChange(tx_rsp);
+                add_liquidity_event = getAddLiquidityEvent(tx_rsp);
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] Add Liquidity getTransactionBlock get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('[error] Add Liquidity getTransactionBlock get an exception'); 
+                    console.error(e);
+                }
+                console.error('wait 2s and try again...'); 
                 await new Promise(f => setTimeout(f, 2000));
                 continue;
             }
-
-            total_gas_fee_add_liquidity = getTotalGasFee(tx_rsp);
-            balance_change_add_liquidity = getBalanceChange(tx_rsp);
-            add_liquidity_event = getAddLiquidityEvent(tx_rsp);
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] Add Liquidity getTransactionBlock get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('[error] Add Liquidity getTransactionBlock get an exception'); 
-                console.error(e);
-            }
-            console.error('wait 2s and try again...'); 
-            await new Promise(f => setTimeout(f, 2000));
-            continue;
+            break;
         }
+
+
+        console.log('')
+        console.log('- Add Liquidity Transaction Rsp - ');
+        console.log('digest_add_liquidity: ', digest_add_liquidity);
+
+        console.log('total_gas_fee_add_liquidity: ', total_gas_fee_add_liquidity.toString());
+
+        console.log('balance_change_add_liquidity.usdc_change: ', balance_change_add_liquidity.usdc_change.toString());
+        console.log('balance_change_add_liquidity.sui_change: ', balance_change_add_liquidity.sui_change.toString());
+        console.log('balance_change_add_liquidity.cetus_change: ', balance_change_add_liquidity.cetus_change.toString());
+
+        console.log('add_liquidity_event.after_liquidity: ', add_liquidity_event.after_liquidity.toString());
+        console.log('add_liquidity_event.amount_a: ', add_liquidity_event.amount_a.toString());
+        console.log('add_liquidity_event.amount_b: ', add_liquidity_event.amount_b.toString());
+        console.log('add_liquidity_event.liquidity: ', add_liquidity_event.liquidity.toString());
+        console.log('');
+
+
+
+
+
+
+
+
+
+        wallet_balance_after_add_liquidity = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
+
+        while(true) { // try best to recover
+            try {
+                wallet_balance_after_add_liquidity = await getAllWalletBalance(account_address);
+                // wait for wallet balance updated.
+                while (balanceNotChange(wallet_balance_after_swap, wallet_balance_after_add_liquidity)) {
+                    date.setTime(Date.now());
+                    console.log('[%s][WARNING] balanceNotChange, wait 1 second... ', date.toLocaleString());
+                    await new Promise(f => setTimeout(f, 1000));
+                    wallet_balance_after_add_liquidity = await getAllWalletBalance(account_address);
+                }                
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] wait for wallet balance updated get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('wait for wallet balance updated get an exception'); 
+                    console.error(e);
+                }
+                await new Promise(f => setTimeout(f, 100)); // 0.1s
+                continue;
+            }
+            break;
+        }
+
+
+
+        // get check_point_status
+        check_point_status_after_add_liquidity = newCheckPointStatus();
+        check_point_status_after_add_liquidity.gas_reserved = SUI_GAS_RESERVED.sub(total_gas_fee_swap_accumulate).sub(total_gas_fee_add_liquidity);
+        check_point_status_after_add_liquidity.usdc_balance = new BN(wallet_balance_after_add_liquidity.usdc_amount);
+        check_point_status_after_add_liquidity.sui_balance = new BN(wallet_balance_after_add_liquidity.sui_amount);
+        check_point_status_after_add_liquidity.cetus_balance = new BN(wallet_balance_after_add_liquidity.cetus_amount);
+        check_point_status_after_add_liquidity.usdc_quota_in_wallet = check_point_status_after_add_liquidity.usdc_balance.clone();
+        check_point_status_after_add_liquidity.sui_quota_in_wallet = check_point_status_after_add_liquidity.sui_balance.sub(check_point_status_after_add_liquidity.gas_reserved);   
+        check_point_status_after_add_liquidity.usdc_quota_in_pos = add_liquidity_event.amount_a.clone();
+        check_point_status_after_add_liquidity.sui_quota_in_pos = add_liquidity_event.amount_b.clone();
+
+        // get price and value
+        let sui_price_after_add_liquidity = d(0);
+        while(true) { // try best to recover
+            try {
+                sui_price_after_add_liquidity = await getCurrentSuiPrice();
+            } catch(e) {
+                if (e instanceof Error) {
+                    console.error('%s [error] getCurrentSuiPrice get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+                } else {
+                    console.error('getCurrentSuiPrice get an exception'); 
+                    console.error(e);
+                }
+                await new Promise(f => setTimeout(f, 100)); // 0.1s
+                continue;
+            }
+            break;
+        }
+        check_point_status_after_add_liquidity.sui_price = sui_price_after_add_liquidity;
+        let quota_value_after_add_liquidity = calcQuotaValue(sui_price_after_add_liquidity, check_point_status_after_swap);
+
+        // print
+        console.log('');
+        console.log(' - Check Point : After Add Liquidity - ');
+        dumpCheckPoint(check_point_status_after_add_liquidity);
+        console.log('Total Quota Value: ', quota_value_after_add_liquidity.total_quota_value);
+        console.log('');       
+
+
+        // dump transaction statistics
+        dumpTransactionInfo('Add Liquidity Transaction Info', check_point_status_last, check_point_status_after_add_liquidity, 
+            sui_price_after_add_liquidity, digest_add_liquidity, total_gas_fee_add_liquidity, balance_change_add_liquidity);
+            
+        check_point_status_last = {...check_point_status_after_add_liquidity};
+
         break;
     }
 
 
-    console.log('')
-    console.log('- Add Liquidity Transaction Rsp - ');
-    console.log('digest_add_liquidity: ', digest_add_liquidity);
-
-    console.log('total_gas_fee_add_liquidity: ', total_gas_fee_add_liquidity.toString());
-
-    console.log('balance_change_add_liquidity.usdc_change: ', balance_change_add_liquidity.usdc_change.toString());
-    console.log('balance_change_add_liquidity.sui_change: ', balance_change_add_liquidity.sui_change.toString());
-    console.log('balance_change_add_liquidity.cetus_change: ', balance_change_add_liquidity.cetus_change.toString());
-
-    console.log('add_liquidity_event.after_liquidity: ', add_liquidity_event.after_liquidity.toString());
-    console.log('add_liquidity_event.amount_a: ', add_liquidity_event.amount_a.toString());
-    console.log('add_liquidity_event.amount_b: ', add_liquidity_event.amount_b.toString());
-    console.log('add_liquidity_event.liquidity: ', add_liquidity_event.liquidity.toString());
-    console.log('');
 
 
 
 
 
 
-
-
-
-    let wallet_balance_after_add_liquidity = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
-
-    while(true) {
-        try {
-            wallet_balance_after_add_liquidity = await getAllWalletBalance(account_address);
-            // wait for wallet balance updated.
-            while (balanceNotChange(wallet_balance_after_swap, wallet_balance_after_add_liquidity)) {
-                date.setTime(Date.now());
-                console.log('[%s][WARNING] balanceNotChange, wait 1 second... ', date.toLocaleString());
-                await new Promise(f => setTimeout(f, 1000));
-                wallet_balance_after_add_liquidity = await getAllWalletBalance(account_address);
-            }
-            break;
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] wait for wallet balance updated get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('wait for wallet balance updated get an exception'); 
-                console.error(e);
-            }
-            await new Promise(f => setTimeout(f, 100)); // 0.1s
-        }
-    }
-
-
-
-    // get check_point_status
-    let check_point_status_after_add_liquidity = newCheckPointStatus();
-    check_point_status_after_add_liquidity.gas_reserved = SUI_GAS_RESERVED.sub(total_gas_fee_swap).sub(total_gas_fee_add_liquidity);
-    check_point_status_after_add_liquidity.usdc_balance = new BN(wallet_balance_after_add_liquidity.usdc_amount);
-    check_point_status_after_add_liquidity.sui_balance = new BN(wallet_balance_after_add_liquidity.sui_amount);
-    check_point_status_after_add_liquidity.cetus_balance = new BN(wallet_balance_after_add_liquidity.cetus_amount);
-    check_point_status_after_add_liquidity.usdc_quota_in_wallet = check_point_status_after_add_liquidity.usdc_balance;
-    check_point_status_after_add_liquidity.sui_quota_in_wallet = check_point_status_after_add_liquidity.sui_balance.sub(check_point_status_after_add_liquidity.gas_reserved);   
-    check_point_status_after_add_liquidity.usdc_quota_in_pos = add_liquidity_event.amount_a;
-    check_point_status_after_add_liquidity.sui_quota_in_pos = add_liquidity_event.amount_b;
-
-    // getprice and value
-    let sui_price_after_add_liquidity = d(0);
-    while(true) {
-        try {
-            sui_price_after_add_liquidity = await getCurrentSuiPrice();
-            break;
-        } catch(e) {
-            if (e instanceof Error) {
-                console.error('%s [error] getCurrentSuiPrice get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-            } else {
-                console.error('getCurrentSuiPrice get an exception'); 
-                console.error(e);
-            }
-            await new Promise(f => setTimeout(f, 100)); // 0.1s
-        }
-    }
-    check_point_status_after_add_liquidity.sui_price = sui_price_after_swap;
-    let quota_value_after_add_liquidity = calcQuotaValue(sui_price_after_swap, check_point_status_after_swap);
-
-    // print
-    console.log('');
-    console.log(' - Check Point : After Add Liquidity - ');
-    dumpCheckPoint(check_point_status_after_add_liquidity);
-    console.log('Total Quota Value: ', quota_value_after_add_liquidity.total_quota_value);
-    console.log('');
-
-
-    // dump transaction statistics
-    dumpTransactionInfo('Add Liquidity Transaction Info', check_point_status_after_swap, check_point_status_after_add_liquidity, 
-        sui_price_after_add_liquidity, digest_add_liquidity, total_gas_fee_add_liquidity, balance_change_add_liquidity);
-
-
-    
 
 
     // calc impermanent loss and value loss in lower/upper bounder and print    
-    let tick_when_add_liqui = getAddLiquidityTickIndex(add_liquidity_event, tick_lower_index_after_swap, tick_upper_index_after_swap);    
+    let tick_when_add_liquidity = getAddLiquidityTickIndex(add_liquidity_event, tick_lower_index_after_swap, tick_upper_index_after_swap);    
 
-    console.log('');    
-    console.log('Tick after swap: %s - (%s) - %s', tick_lower_index_after_swap, current_tick_index_after_swap, tick_upper_index_after_swap)
-    console.log('Tick when add liqui: %s - (%s) - %s', tick_lower_index_after_swap, tick_when_add_liqui, tick_upper_index_after_swap);
+    console.log('');
+    console.log('Position Tick Range When Add Liquidity: %d - (%d) - %d', tick_lower_index_after_swap, tick_when_add_liquidity, tick_upper_index_after_swap);
 
-    let impermanent_loss_ctx = getImpermanentLossCtx(tick_lower_index_after_swap, tick_when_add_liqui, tick_upper_index_after_swap, add_liquidity_event);
+    let impermanent_loss_ctx = getImpermanentLossCtx(tick_lower_index_after_swap, tick_when_add_liquidity, tick_upper_index_after_swap, 
+        add_liquidity_event, check_point_status, check_point_status_after_add_liquidity);
     console.log(' - impermanent_loss_ctx - ');
     console.log(JSON.stringify(impermanent_loss_ctx, null, 2));
     console.log('');
@@ -1719,12 +2121,14 @@ async function main() {
             break;
         }
         let current_tick_index_after_add_liquidity: number = pools_after_add_liquidity[0].current_tick_index;
-        let tick_lower_index_after_add_liquidity: number = Math.floor(current_tick_index_after_add_liquidity / POSITION_TICK_RANGE) * POSITION_TICK_RANGE;
+        let tick_lower_index_after_add_liquidity: number = position_lower_bound_seed + Math.floor((current_tick_index_after_add_liquidity - position_lower_bound_seed) / POSITION_TICK_RANGE) * POSITION_TICK_RANGE;
         let tick_upper_index_after_add_liquidity: number = tick_lower_index_after_add_liquidity + POSITION_TICK_RANGE;
 
-        console.log('Position Tick Range Add: %d - (%d) - %d', tick_lower_index_after_swap, tick_when_add_liqui, tick_upper_index_after_swap);
-        console.log('Position Tick Range Now: %d - (%d) - %d', tick_lower_index_after_add_liquidity, current_tick_index_after_add_liquidity, tick_upper_index_after_add_liquidity);
-        console.log('Position Price Range Now: %s - (%s) - %s', 
+        console.log('Position Tick Range Initial: %d - (%d) - %d', tick_lower_index, current_tick_index, tick_upper_index);
+        console.log('Position Tick Range After Swap: %d - (%d) - %d', tick_lower_index_after_swap, current_tick_index_after_swap, tick_upper_index_after_swap);
+        console.log('Position Tick Range When Add Liquidity: %d - (%d) - %d', tick_lower_index_after_swap, tick_when_add_liquidity, tick_upper_index_after_swap);
+        console.log('-> Position Tick Range Now: %d - (%d) - %d', tick_lower_index_after_add_liquidity, current_tick_index_after_add_liquidity, tick_upper_index_after_add_liquidity);
+        console.log('-> Position Price Range Now: %s - (%s) - %s', 
             d(1).div(TickMath.tickIndexToPrice(tick_lower_index_after_add_liquidity, 6, 9)).toFixed(6).toString(),
             d(1).div(TickMath.tickIndexToPrice(current_tick_index_after_add_liquidity, 6, 9)).toFixed(6).toString(),
             d(1).div(TickMath.tickIndexToPrice(tick_upper_index_after_add_liquidity, 6, 9)).toFixed(6).toString());
@@ -1811,23 +2215,19 @@ async function main() {
         let fee_and_reward_value = getFeeAndRewardValue(sui_price_after_add_liquidity, cetus_price_after_add_liquidity, fee_and_reward);
         
         console.log('');
-        console.log('cetus_price_after_add_liquidity: ', cetus_price_after_add_liquidity);
-        console.log('sui_price_after_add_liquidity: ', sui_price_after_add_liquidity);
-        console.log('');
+        console.log('sui_price_after_add_liquidity: %s  |  cetus_price_after_add_liquidity: %s', 
+            sui_price_after_add_liquidity.toString(), 
+            cetus_price_after_add_liquidity.toString());
         console.log('- Fee and Rewards Amount, Value- ');
-        console.log('fee_owned_a: %s ,  value: %s', 
+        console.log('fee_owned_a: %s,  value: %s  |  fee_owned_b: %s,  value: %s', 
             fee_and_reward.fee_owned_a.toString(),
-            fee_and_reward_value.fee_usdc_value.toString()
-        );
-        console.log('fee_owned_b: %s ,  value: %s', 
+            fee_and_reward_value.fee_usdc_value.toString(),
             fee_and_reward.fee_owned_b.toString(),
             fee_and_reward_value.fee_sui_value.toString()
         );
-        console.log('rwd_owned_sui: %s ,  value: %s', 
+        console.log('rwd_owned_sui: %s, value: %s  |  rwd_owned_cetus: %s, value: %s', 
             fee_and_reward.rwd_owned_sui.toString(),
-            fee_and_reward_value.rwd_sui_value.toString()
-        );
-        console.log('rwd_owned_cetus: %s,  value: %s', 
+            fee_and_reward_value.rwd_sui_value.toString(),
             fee_and_reward.rwd_owned_cetus.toString(),
             fee_and_reward_value.rwd_cetus_value.toString()
         );
@@ -1850,44 +2250,17 @@ async function main() {
         // console.log(JSON.stringify(fee_and_reward_value_upper_index, null, 2));
 
 
-
-
-        console.log('');
         console.log('--------------------------------------------------------');
-        // print fee_rwd and loss ratio
-        console.log('lower_idx, impermanent_loss:  %s(fee_rwd) / %s(imper_los), %s%%', 
-            fee_and_reward_value_lower_index.total_value.toFixed(6),
-            impermanent_loss_ctx.impermanent_loss_lower_index.toFixed(6),
-            fee_and_reward_value_lower_index.total_value.div(impermanent_loss_ctx.impermanent_loss_lower_index).mul(100).abs().toFixed(6)
-        );
-
-        console.log('upper_idx, impermanent_loss:  %s(fee_rwd) / %s(imper_los), %s%%', 
-            fee_and_reward_value_upper_index.total_value.toFixed(6),
-            impermanent_loss_ctx.impermanent_loss_upper_index.toFixed(6),
-            fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.impermanent_loss_upper_index).mul(100).abs().toFixed(6)
-        );
-
-        console.log('lower_idx, value_loss:  %s(fee_rwd) / %s(value_los), -%%', 
-            fee_and_reward_value_lower_index.total_value.toFixed(6),
-            impermanent_loss_ctx.value_loss_lower_index.toFixed(6)
-        );
-
-        console.log('upper_idx, value_loss:  %s(fee_rwd) / %s(value_los), %s%%', 
-            fee_and_reward_value_upper_index.total_value.toFixed(6),
-            impermanent_loss_ctx.value_loss_upper_index.toFixed(6),
-            fee_and_reward_value_upper_index.total_value.div(impermanent_loss_ctx.value_loss_upper_index).mul(100).abs().toFixed(6)
-        );
+        dumpImpermanentLossAndEarningRatio(impermanent_loss_ctx, fee_and_reward_value_lower_index, fee_and_reward_value_upper_index);
         console.log('--------------------------------------------------------');
-        console.log('');
 
 
-        // dump current benifit        
-
+        // dump current benifit
         console.log('--------------------------------------------------------');
         // gas loss
-        let all_gas_fee = total_gas_fee_swap.add(total_gas_fee_add_liquidity);
+        let all_gas_fee = total_gas_fee_swap_accumulate.add(total_gas_fee_add_liquidity);
         let all_gas_fee_value = Decimal(all_gas_fee.neg().toString()).mul(Decimal.pow(10, -9)).mul(sui_price_after_add_liquidity);
-        console.log('Total Gas Used: %s, value: %s', all_gas_fee.neg().toString(), all_gas_fee_value);        
+        console.log('Total Gas Used: %s, value: %s', all_gas_fee.neg().toString(), all_gas_fee_value);
 
         // loss in transaction
         const coin_amount_in_pos = ClmmPoolUtil.getCoinAmountFromLiquidity(
@@ -1897,13 +2270,22 @@ async function main() {
             TickMath.tickIndexToSqrtPriceX64(tick_upper_index_after_swap),
             true
         );
-        let check_point_status_in_clmm = check_point_status_after_add_liquidity;
+        let check_point_status_in_clmm = {...check_point_status_after_add_liquidity};
         check_point_status_in_clmm.usdc_quota_in_pos = new BN(coin_amount_in_pos.coin_amount_a);
         check_point_status_in_clmm.sui_quota_in_pos = new BN(coin_amount_in_pos.coin_amount_b);        
-        let quota_value_begin = calcQuotaValue(sui_price_after_add_liquidity, check_point_status);        
-        let quota_value_end = calcQuotaValue(sui_price_after_add_liquidity, check_point_status_in_clmm);
-        let total_loss_of_quota_part_value = quota_value_end.total_quota_value.sub(quota_value_begin.total_quota_value);
-        console.log('Total Loss of Quota Part Value: %s', total_loss_of_quota_part_value);
+        let cur_quota_value_holding_both_coin_ab = calcQuotaValue(sui_price_after_add_liquidity, check_point_status);        
+        let cur_quota_value = calcQuotaValue(sui_price_after_add_liquidity, check_point_status_in_clmm);        
+        let init_quota_value = calcQuotaValue(check_point_status.sui_price, check_point_status); // init_quota_value.total_quota_value equal to cur_quota_value_holding_both_coin_a
+
+        let inpermanent_loss_with_holding_both_coin_ab = cur_quota_value.total_quota_value.sub(cur_quota_value_holding_both_coin_ab.total_quota_value);
+        console.log('Impermanent Loss Value(Coin ab Initial): %s', inpermanent_loss_with_holding_both_coin_ab);
+
+        let inpermanent_loss_with_holding_only_coin_a = cur_quota_value.total_quota_value.sub(init_quota_value.total_quota_value);
+        console.log('Impermanent Loss Value(Coin a Initial): %s', inpermanent_loss_with_holding_only_coin_a);
+
+        let cur_coin_b_value_holding_only_coin_b = init_quota_value.total_quota_value.div(check_point_status.sui_price).mul(sui_price_after_add_liquidity);
+        let inpermanent_loss_with_holding_only_coin_b = cur_quota_value.total_quota_value.sub(cur_coin_b_value_holding_only_coin_b);
+        console.log('Impermanent Loss Value(Coin b Initial): %s', inpermanent_loss_with_holding_only_coin_b);
 
         // fee and rwd earning
         console.log('Total Fee and Reward Value: %s', fee_and_reward_value.total_value);
@@ -1911,308 +2293,50 @@ async function main() {
         console.log('=');
 
         // Relative Benifit Now
-        let total_benefit = all_gas_fee_value.add(fee_and_reward_value.total_value).add(total_loss_of_quota_part_value);
-        console.log('Relative Benifit: %s (%s%%)', total_benefit, total_benefit.div(quota_value_begin.total_quota_value).mul(100));
+        let total_benefit = all_gas_fee_value.add(fee_and_reward_value.total_value).add(inpermanent_loss_with_holding_both_coin_ab);
+        console.log('Benifit(2 Holding Both Coin ab): %s (%s%%)', 
+            total_benefit, 
+            total_benefit.div(init_quota_value.total_quota_value).mul(100));
 
-        let total_benefit_without_gas = fee_and_reward_value.total_value.add(total_loss_of_quota_part_value);
-        console.log('Relative Benifit(Without Gas): %s (%s%%)', total_benefit_without_gas, total_benefit_without_gas.div(quota_value_begin.total_quota_value).mul(100));
+        let total_benefit_without_gas = fee_and_reward_value.total_value.add(inpermanent_loss_with_holding_both_coin_ab);
+        console.log('Benifit(2 Holding Both Coin ab, Without Gas): %s (%s%%)', 
+            total_benefit_without_gas, 
+            total_benefit_without_gas.div(init_quota_value.total_quota_value).mul(100));
 
-        // Absolute Benifit Now
+
+        let total_benefit_holding_only_a = all_gas_fee_value.add(fee_and_reward_value.total_value).add(inpermanent_loss_with_holding_only_coin_a);
+        console.log('Benifit(2 Holding Only Coin a): %s (%s%%)', 
+            total_benefit_holding_only_a, 
+            total_benefit_holding_only_a.div(init_quota_value.total_quota_value).mul(100));
+
+        let total_benefit_holding_only_a_without_gas = fee_and_reward_value.total_value.add(inpermanent_loss_with_holding_only_coin_a);
+        console.log('Benifit(2 Holding Only Coin a, Without Gas): %s (%s%%)', 
+            total_benefit_holding_only_a_without_gas, 
+            total_benefit_holding_only_a_without_gas.div(init_quota_value.total_quota_value).mul(100));
+
+        let total_benefit_holding_only_b = all_gas_fee_value.add(fee_and_reward_value.total_value).add(inpermanent_loss_with_holding_only_coin_b);
+        console.log('Benifit(2 Holding Only Coin b): %s (%s%%)', 
+            total_benefit_holding_only_b, 
+            total_benefit_holding_only_b.div(init_quota_value.total_quota_value).mul(100));
+
+        let total_benefit_holding_only_b_without_gas = fee_and_reward_value.total_value.add(inpermanent_loss_with_holding_only_coin_b);
+        console.log('Benifit(2 Holding Only Coin b, Without Gas): %s (%s%%)', 
+            total_benefit_holding_only_b_without_gas, 
+            total_benefit_holding_only_b_without_gas.div(init_quota_value.total_quota_value).mul(100));
         console.log('--------------------------------------------------------');
-        let quota_value_begin_in_initial_price = calcQuotaValue(check_point_status.sui_price, check_point_status);
-        let initial_amount_value_change = quota_value_begin.total_quota_value.sub(quota_value_begin_in_initial_price.total_quota_value);
-        console.log('Init amount value change: ', initial_amount_value_change.toString());
-
-        let absolute_benifit = initial_amount_value_change.add(total_benefit);
-        console.log('Absolute Benifit: %s(%s%%)', absolute_benifit.toString(), absolute_benifit.div(quota_value_begin_in_initial_price.total_quota_value).mul(100));
-
-        let absolute_benifit_without_gas = initial_amount_value_change.add(total_benefit_without_gas);
-        console.log('Absolute Benifit(Without Gas): %s(%s%%)', absolute_benifit_without_gas.toString(), absolute_benifit_without_gas.div(quota_value_begin_in_initial_price.total_quota_value).mul(100));
+        console.log('Quota Value:%s(%s), FeeRwd: %s', 
+            cur_quota_value.total_quota_value.toString(), 
+            inpermanent_loss_with_holding_only_coin_a.add(all_gas_fee_value).toString(),
+            fee_and_reward_value.total_value.toString()
+        );
         console.log('--------------------------------------------------------');
-        console.log('');
 
 
 
         
 
-
-
-        if (current_tick_index_after_add_liquidity < tick_lower_index_after_swap || current_tick_index_after_add_liquidity > tick_upper_index_after_swap) {
-            console.log('Out of position, close position...');
-
-            let digest_close_position = '';
-            let total_gas_fee_close_position = new BN(0);
-            let balance_change_close_position: BalanceChange = {
-                usdc_change: new BN(0),
-                sui_change: new BN(0),
-                cetus_change: new BN(0)
-            };
-            let remove_liquidity_event = newLiquidityEvent();
-            let fee_and_reward_after_close_position = newFeeAndReward();
-            while (true) {
-                try {
-                    const reward_coin_types = pools_after_add_liquidity[0].rewarder_infos.map((rewarder) => rewarder.coin_type);
-                    const close_position_payload = await cetusClmmSDK.Position.closePositionPayload({
-                        coin_type_a: pools_after_add_liquidity[0].coin_type_a,
-                        coin_type_b: pools_after_add_liquidity[0].coin_type_b,
-                        min_amount_a: '0',
-                        min_amount_b: '0',
-                        rewarder_coin_types: reward_coin_types,
-                        pool_id: pools_after_add_liquidity[0].id,
-                        pos_id: positions[0].pos_object_id,
-                        collect_fee: true,
-                        });
-                    dumpSDKRet2Logfile('Close Position: cetusClmmSDK.Position.closePositionPayload', JSON.stringify(close_position_payload, null, 2));
-                    console.log('[%s] - cetusClmmSDK.Position.closePositionPayload - ', date.toLocaleString());
-
-                    const transfer_txn = await cetusClmmSDK.FullClient.sendTransaction(sendKeypair, close_position_payload);
-                    dumpSDKRet2Logfile('Close Position: cetusClmmSDK.FullClient.sendTransaction', JSON.stringify(transfer_txn, null, 2));
-                    console.log('[%s] - cetusClmmSDK.FullClient.sendTransaction: %s - ', date.toLocaleString(), transfer_txn?.effects?.status.status);
-
-                    if (transfer_txn?.effects?.status.status !== "success") {
-                        console.log('[error] Close Position: cetusClmmSDK.FullClient.sendTransaction return failed, wait 2s and try again...');
-                        await new Promise(f => setTimeout(f, 2000));
-                        continue;
-                    }                    
-                    digest_close_position = transfer_txn.digest;
-                    // total_gas_fee_close_position = getTotalGasFee(transfer_txn);
-                    // balance_change_close_position = getBalanceChange(transfer_txn);
-                    // remove_liquidity_event = getRemoveLiquidityEvent(transfer_txn);
-                    // fee_and_reward_after_close_position = getFeeAndRewardCollectEvent(transfer_txn);
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] Close Position get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('[error] Close Position get an exception'); 
-                        console.error(e);
-                    }
-                    console.error('wait 2s and try again...'); 
-                    await new Promise(f => setTimeout(f, 2000));
-                    continue;
-                }
-                break;
-            }
-
-            while (true) {
-                try {
-                    const tx_rsp = await cetusClmmSDK.FullClient.getTransactionBlock({
-                        digest: digest_close_position, 
-                        options: {
-                            showBalanceChanges: true,
-                            showEffects: true,
-                            showEvents: true
-                            // showInput: true,
-                            // showObjectChanges: true,
-                            // showRawEffects: true,
-                            // showRawInput:true
-                        }
-                    });
-                    if (tx_rsp.effects?.status.status !== 'success') {
-                        console.log('[error] Close Position: cetusClmmSDK.FullClient.getTransactionBlock return failed, wait 2s and try again...');
-                        await new Promise(f => setTimeout(f, 2000));
-                        continue;
-                    }
-
-                    total_gas_fee_close_position = getTotalGasFee(tx_rsp);
-                    balance_change_close_position = getBalanceChange(tx_rsp);
-                    remove_liquidity_event = getRemoveLiquidityEvent(tx_rsp);
-                    fee_and_reward_after_close_position = getFeeAndRewardCollectEvent(tx_rsp);
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] Close Position getTransactionBlock get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('[error] Close Position getTransactionBlock get an exception'); 
-                        console.error(e);
-                    }
-                    console.error('wait 2s and try again...'); 
-                    await new Promise(f => setTimeout(f, 2000));
-                    continue;
-                }
-                break;
-            }
-
-            console.log('')
-            console.log('- Close Position Transaction Rsp - ');
-            console.log('digest_close_position: ', digest_close_position);
-
-            console.log('total_gas_fee_close_position: ', total_gas_fee_close_position.toString());
-
-            console.log('balance_change_close_position.usdc_change: ', balance_change_close_position.usdc_change.toString());
-            console.log('balance_change_close_position.sui_change: ', balance_change_close_position.sui_change.toString());
-            console.log('balance_change_close_position.cetus_change: ', balance_change_close_position.cetus_change.toString());
-
-            console.log('remove_liquidity_event.after_liquidity: ', remove_liquidity_event.after_liquidity.toString());
-            console.log('remove_liquidity_event.amount_a: ', remove_liquidity_event.amount_a.toString());
-            console.log('remove_liquidity_event.amount_b: ', remove_liquidity_event.amount_b.toString());
-            console.log('remove_liquidity_event.liquidity: ', remove_liquidity_event.liquidity.toString());
-
-            console.log('fee_and_reward_after_close_position.fee_owned_a: ', fee_and_reward_after_close_position.fee_owned_a.toString());
-            console.log('fee_and_reward_after_close_position.fee_owned_b: ', fee_and_reward_after_close_position.fee_owned_b.toString());
-            console.log('fee_and_reward_after_close_position.rwd_owned_sui: ', fee_and_reward_after_close_position.rwd_owned_sui.toString());
-            console.log('fee_and_reward_after_close_position.rwd_owned_cetus: ', fee_and_reward_after_close_position.rwd_owned_cetus.toString());
-            console.log('');
-
-
-
-
-            let wallet_balance_after_close_position = {usdc_amount: '0', sui_amount: '0', cetus_amount: '0'};
-            while(true) {
-                try {
-                    wallet_balance_after_close_position = await getAllWalletBalance(account_address);
-                    // wait for wallet balance updated.
-                    while (balanceNotChange(wallet_balance_after_add_liquidity, wallet_balance_after_close_position)) {
-                        date.setTime(Date.now());
-                        console.log('[%s][WARNING] balanceNotChange, wait 1 second... ', date.toLocaleString());
-                        await new Promise(f => setTimeout(f, 1000));
-                        wallet_balance_after_close_position = await getAllWalletBalance(account_address);
-                    }
-                    break;
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] wait for wallet balance updated get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('wait for wallet balance updated get an exception'); 
-                        console.error(e);
-                    }
-                    await new Promise(f => setTimeout(f, 100)); // 0.1s
-                }
-            }
-
-            // get check_point_status
-            let check_point_status_after_close_position = newCheckPointStatus();
-            check_point_status_after_close_position.gas_reserved = SUI_GAS_RESERVED.sub(total_gas_fee_swap).sub(total_gas_fee_add_liquidity).sub(total_gas_fee_close_position);
-            check_point_status_after_close_position.usdc_balance = new BN(wallet_balance_after_close_position.usdc_amount);
-            check_point_status_after_close_position.sui_balance = new BN(wallet_balance_after_close_position.sui_amount);
-            check_point_status_after_close_position.cetus_balance = new BN(wallet_balance_after_close_position.cetus_amount);
-            check_point_status_after_close_position.usdc_quota_in_wallet = check_point_status_after_close_position.usdc_balance.sub(fee_and_reward_after_close_position.fee_owned_a);
-            check_point_status_after_close_position.sui_quota_in_wallet = check_point_status_after_close_position.sui_balance.sub(check_point_status_after_close_position.gas_reserved).
-                    sub(fee_and_reward_after_close_position.fee_owned_b).sub(fee_and_reward_after_close_position.rwd_owned_sui);
-            check_point_status_after_close_position.usdc_fee = fee_and_reward_after_close_position.fee_owned_a;
-            check_point_status_after_close_position.sui_fee = fee_and_reward_after_close_position.fee_owned_b;
-            check_point_status_after_close_position.sui_rwd = fee_and_reward_after_close_position.rwd_owned_sui;
-            check_point_status_after_close_position.cetus_rwd = fee_and_reward_after_close_position.rwd_owned_cetus;           
-            
-
-            // get price and value
-            let sui_price_after_close_position = d(0);
-            while(true) {
-                try {
-                    sui_price_after_close_position = await getCurrentSuiPrice();
-                    break;
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] getCurrentSuiPrice get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('getCurrentSuiPrice get an exception'); 
-                        console.error(e);
-                    }
-                    await new Promise(f => setTimeout(f, 100)); // 0.1s
-                }
-            }
-            check_point_status_after_close_position.sui_price = sui_price_after_close_position;
-            let quota_value_after_close_position = calcQuotaValue(sui_price_after_close_position, check_point_status_after_close_position);
-
-            // print
-            console.log('');
-            console.log(' - Check Point : After Close Position - ');
-            dumpCheckPoint(check_point_status_after_close_position);
-            console.log('Total Quota Value: ', quota_value_after_close_position.total_quota_value);
-            console.log('');
-
-
-
-            // dump transaction statistics
-            dumpTransactionInfo('Close Position Transaction Info', check_point_status_after_add_liquidity, check_point_status_after_close_position, 
-                sui_price_after_close_position, digest_close_position, total_gas_fee_close_position, balance_change_close_position);
-
-
-
-            
-
-            let sui_price_final = d(0);
-            while(true) {
-                try {
-                    sui_price_final = await getCurrentSuiPrice();
-                    break;
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] getCurrentSuiPrice final get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('getCurrentSuiPrice final get an exception'); 
-                        console.error(e);
-                    }
-                    await new Promise(f => setTimeout(f, 100)); // 0.1s
-                }
-            }
-
-            let cetus_price_final = d(0);
-            while(true) {
-                try {
-                    cetus_price_final = await getCurrentCetusPrice();
-                    break;
-                } catch(e) {
-                    if (e instanceof Error) {
-                        console.error('%s [error] getCurrentCetusPrice final get an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-                    } else {
-                        console.error('getCurrentCetusPrice final get an exception'); 
-                        console.error(e);
-                    }
-                    await new Promise(f => setTimeout(f, 100)); // 0.1s
-                }
-            }
-
-            
-
-            
-
-            
-
-            console.log('');
-            console.log('');
-            console.log('--------------------------------------------------------');
-            // gas loss
-            let all_gas_fee = total_gas_fee_swap.add(total_gas_fee_add_liquidity).add(total_gas_fee_close_position);
-            let all_gas_fee_value = Decimal(all_gas_fee.neg().toString()).mul(Decimal.pow(10, -9)).mul(sui_price_final);
-            console.log('Total Gas Used: %s, value: %s', all_gas_fee.neg().toString(), all_gas_fee_value);            
-
-            // final transaction loss
-            let quota_value_begin = calcQuotaValue(sui_price_final, check_point_status);
-            let quota_value_end = calcQuotaValue(sui_price_final, check_point_status_after_close_position);
-            let total_loss_of_quota_part_value = quota_value_end.total_quota_value.sub(quota_value_begin.total_quota_value);
-            console.log('Total Loss of Quota Part Value: %s', total_loss_of_quota_part_value);
-
-            // final fee and rwd earning
-            let fee_and_reward_value_final = getFeeAndRewardValue(sui_price_final, cetus_price_final, fee_and_reward_after_close_position);
-            console.log('Total Fee and Reward Value: %s', fee_and_reward_value_final.total_value);
-
-            console.log('=');
-
-            // Relative Benifit
-            let total_benefit = all_gas_fee_value.add(fee_and_reward_value_final.total_value).add(total_loss_of_quota_part_value);
-            console.log('Relative Benifit: %s (%s%%)', total_benefit, total_benefit.div(quota_value_begin.total_quota_value).mul(100));
-
-            let total_benefit_without_gas = fee_and_reward_value_final.total_value.add(total_loss_of_quota_part_value);
-            console.log('Relative Benifit(Without Gas): %s (%s%%)', total_benefit_without_gas, total_benefit_without_gas.div(quota_value_begin.total_quota_value).mul(100));
-
-            // Absolute Benifit
-            console.log('--------------------------------------------------------');
-            let quota_value_begin_in_initial_price = calcQuotaValue(check_point_status.sui_price, check_point_status);
-            let initial_amount_value_change = quota_value_begin.total_quota_value.sub(quota_value_begin_in_initial_price.total_quota_value);
-            console.log('Init amount value change: ', initial_amount_value_change.toString());
-
-            let absolute_benifit = initial_amount_value_change.add(total_benefit);
-            console.log('Absolute Benifit: %s(%s%%)', absolute_benifit.toString(), absolute_benifit.div(quota_value_begin_in_initial_price.total_quota_value).mul(100));
-
-            let absolute_benifit_without_gas = initial_amount_value_change.add(total_benefit_without_gas);
-            console.log('Absolute Benifit(Without Gas): %s(%s%%)', absolute_benifit_without_gas.toString(), absolute_benifit_without_gas.div(quota_value_begin_in_initial_price.total_quota_value).mul(100));
-            console.log('--------------------------------------------------------');
-            console.log('');
-            console.log('');
-            break;
-        }
     }
     return;
 }
 
 main();
-
