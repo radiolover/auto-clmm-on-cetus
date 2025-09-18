@@ -11,6 +11,7 @@
         "sourceMap":true
     },
     "files": [
-      "miner.ts"
+      "miner.ts",
+      "sqlite3_utils.ts"
     ]
 }
