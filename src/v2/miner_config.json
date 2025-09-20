@@ -1,0 +1,4 @@
+{
+    "mode": "close_position",
+    "close_when_sig_int": "true"
+}

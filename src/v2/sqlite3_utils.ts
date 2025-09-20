@@ -52,8 +52,14 @@ function positionInfoDB2PositionInfo(row: PositionInfoDB): PositionInfo {
 
 type CheckPointStatusDB = {    
     unix_timestamp_ms: number;
+    type: string;
+    cur_tick_index_for_tx: number;
+    tick_lower_index_for_tx: number;
+    tick_upper_index_for_tx: number;
     tick_index: number;
     sui_price: string;
+    cetus_tick_index: number;
+    cetus_price: string;
     usdc_balance: string;
     sui_balance: string;
     cetus_balance: string;
@@ -74,8 +80,14 @@ type CheckPointStatusDB = {
 function checkPointStatusDB2CheckPointStatus(row: CheckPointStatusDB): CheckPointStatus {
     let ret: CheckPointStatus = newCheckPointStatus();
     ret.unix_timestamp_ms = row.unix_timestamp_ms;
+    ret.type = row.type;
+    ret.cur_tick_index_for_tx = row.cur_tick_index_for_tx;
+    ret.tick_lower_index_for_tx = row.tick_lower_index_for_tx;
+    ret.tick_upper_index_for_tx = row.tick_upper_index_for_tx;
     ret.tick_index = row.tick_index;
     ret.sui_price = new Decimal(row.sui_price);
+    ret.cetus_tick_index = row.cetus_tick_index;
+    ret.cetus_price = new Decimal(row.cetus_price);
     ret.usdc_balance = new BN(row.usdc_balance);
     ret.sui_balance = new BN(row.sui_balance);
     ret.cetus_balance = new BN(row.cetus_balance);
@@ -94,8 +106,8 @@ function checkPointStatusDB2CheckPointStatus(row: CheckPointStatusDB): CheckPoin
 
 type TransactionInfoDB = {    
     unix_timestamp_ms: number;
-    digest: string;
-    trans_type: string;
+    type: string;
+    digest: string;    
     total_gas_fee: string;
     balance_change_usdc: string;
     balance_change_sui: string;
@@ -115,6 +127,7 @@ type TransactionInfoDB = {
 function transactionInfoDB2TransactionInfo(row: TransactionInfoDB): TransactionInfo {
     let ret: TransactionInfo = newTransactionInfo();
     ret.unix_timestamp_ms = row.unix_timestamp_ms;
+    ret.type = row.type;
     ret.digest = row.digest;
     ret.total_gas_fee = new BN(row.total_gas_fee);
     ret.balance_change.usdc_change = new BN(row.balance_change_usdc);
@@ -213,6 +226,18 @@ function tableExists(db: sqlite3.Database, tableName: string): Promise<{success:
 }
 
 
+function formatDate(date: Date): string {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0"); // 月份从0开始
+    const dd = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mi = String(date.getMinutes()).padStart(2, "0");
+    const ss = String(date.getSeconds()).padStart(2, "0");
+
+    return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+}
+
+
 
 
 
@@ -260,16 +285,23 @@ export async function tryCreatePositionInfoTable(db: sqlite3.Database): Promise<
     return ret;
 }
 
+
 export async function tryCreateCheckPointStatusTable(db: sqlite3.Database, position_info: PositionInfo): Promise<{success: boolean; error?: string}> {
     if (position_info.pos_id === '' || position_info.unix_timestamp_ms === 0) {
         console.log('tryCreateCheckPointStatusTable: position_info is empty');
         return {success: false, error: 'pos_info_empty'};
     }
-    let table_name = util.format('check_point_status_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id);
+    let table_name = util.format('check_point_status_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id);
     let sql = 'CREATE TABLE IF NOT EXISTS ' + table_name + `(
                 unix_timestamp_ms INTEGER PRIMARY KEY,
+                type TEXT,
+                cur_tick_index_for_tx INTEGER,
+                tick_lower_index_for_tx INTEGER,
+                tick_upper_index_for_tx INTEGER,
                 tick_index INTEGER,
                 sui_price TEXT,
+                cetus_tick_index INTEGER,
+                cetus_price TEXT,
                 usdc_balance TEXT,
                 sui_balance TEXT,
                 cetus_balance TEXT,
@@ -302,11 +334,11 @@ export async function tryCreateTransactionInfoTable(db: sqlite3.Database, positi
         console.log('tryCreateTransactionInfoTable: position_info is empty');
         return {success: false, error: 'pos_info_empty'};
     }
-    let table_name = util.format('transaction_info_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id);
+    let table_name = util.format('transaction_info_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id);
     let sql = 'CREATE TABLE IF NOT EXISTS ' + table_name + `(
                 unix_timestamp_ms INTEGER PRIMARY KEY,
+                type TEXT,
                 digest TEXT,
-                trans_type TEXT,
                 total_gas_fee TEXT,
                 balance_change_usdc TEXT,
                 balance_change_sui TEXT,
@@ -439,7 +471,7 @@ export async function insertCheckPointStatus(db: sqlite3.Database, position_info
         console.log('insertCheckPointStatus: position_info is empty');
         return {success: false, error: 'pos_info_empty'};
     }
-    let table_name = util.format('check_point_status_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id);
+    let table_name = util.format('check_point_status_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id);
     let ret_table_chk = await tableExists(db, table_name);
     if (ret_table_chk.success) {
         if (!ret_table_chk.exist) {
@@ -451,10 +483,16 @@ export async function insertCheckPointStatus(db: sqlite3.Database, position_info
         return ret_table_chk;
     }
 
-    let value_string = util.format('%d, %d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %d, \'%s\'', 
+    let value_string = util.format('%d, \'%s\', %d, %d, %d, %d, \'%s\', %d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %d, \'%s\'', 
         check_point_status.unix_timestamp_ms,
+        check_point_status.type,
+        check_point_status.cur_tick_index_for_tx,
+        check_point_status.tick_lower_index_for_tx,
+        check_point_status.tick_upper_index_for_tx,
         check_point_status.tick_index,
         check_point_status.sui_price.toString(),
+        check_point_status.cetus_tick_index,
+        check_point_status.cetus_price.toString(),
         check_point_status.usdc_balance.toString(),
         check_point_status.sui_balance.toString(),
         check_point_status.cetus_balance.toString(),
@@ -481,12 +519,12 @@ export async function insertCheckPointStatus(db: sqlite3.Database, position_info
     return ret;
 }
 
-export async function insertTransactionInfo(db: sqlite3.Database, position_info: PositionInfo, transaction_info: TransactionInfo, type: string): Promise<{success: boolean; error?: string}> {
+export async function insertTransactionInfo(db: sqlite3.Database, position_info: PositionInfo, transaction_info: TransactionInfo): Promise<{success: boolean; error?: string}> {
     if (position_info.pos_id === '' || position_info.unix_timestamp_ms === 0) {
         console.log('insertTransactionInfo: position_info is empty');
         return {success: false, error: 'pos_info_empty'};
     }
-    let table_name = util.format('transaction_info_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id); 
+    let table_name = util.format('transaction_info_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id); 
     let ret_table_chk = await tableExists(db, table_name);
     if (ret_table_chk.success) {
         if (!ret_table_chk.exist) {
@@ -500,8 +538,8 @@ export async function insertTransactionInfo(db: sqlite3.Database, position_info:
 
     let value_string = util.format('%d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %d, \'%s\'', 
         transaction_info.unix_timestamp_ms,
-        transaction_info.digest,
-        type,
+        transaction_info.type,
+        transaction_info.digest,        
         transaction_info.total_gas_fee.toString(),
         transaction_info.balance_change.usdc_change.toString(),
         transaction_info.balance_change.sui_change.toString(),
@@ -528,10 +566,10 @@ export async function insertTransactionInfo(db: sqlite3.Database, position_info:
     return ret;
 }
 
-export async function getPositionInfo(db: sqlite3.Database, position_info: PositionInfo): Promise<{success: boolean; error?: string}> {
-    if (position_info.pos_id === '') {
-        console.log('getPositionInfo: position_info is empty');
-        return {success: false, error: 'pos_info_empty'};
+export async function getPositionInfo(db: sqlite3.Database, pos_object_id: string): Promise<{success: boolean; error?: string, position_info?:PositionInfo}> {
+    if (pos_object_id === '') {
+        console.log('getPositionInfo: pos_object_id is empty');
+        return {success: false, error: 'pos_object_id_empty'};
     }
     let table_name = 'position_info';
     let ret_table_chk = await tableExists(db, table_name);
@@ -544,7 +582,7 @@ export async function getPositionInfo(db: sqlite3.Database, position_info: Posit
         console.log('getPositionInfo table exist check failed:', ret_table_chk.error);
         return ret_table_chk;
     }
-    let where_clause = util.format('(pos_id=\'%s\')', position_info.pos_id);
+    let where_clause = util.format('(pos_id=\'%s\')', pos_object_id);
 
     let sql = util.format('SELECT * FROM %s WHERE %s', table_name, where_clause);
     let ret = await getAsync<PositionInfoDB>(db, sql);
@@ -552,7 +590,9 @@ export async function getPositionInfo(db: sqlite3.Database, position_info: Posit
         console.log('getPositionInfo successfully: \n', sql);
         if (ret.row) {
             console.log(ret.row);
-            position_info = positionInfoDB2PositionInfo(ret.row);
+            let position_info = positionInfoDB2PositionInfo(ret.row);
+            return {success: true, position_info};
+            
         } else {
             return {success: false, error: 'no_row_selected'};
         }
@@ -564,21 +604,58 @@ export async function getPositionInfo(db: sqlite3.Database, position_info: Posit
 
 
 
+export async function getAllPositionInfo(db: sqlite3.Database): Promise<{success: boolean; error?: string, position_infos?: PositionInfo[]}>{
 
-export async function getCheckPointStatus(db: sqlite3.Database, position_info: PositionInfo, check_point_status_arr: CheckPointStatus[]): Promise<{success: boolean; error?: string}>{
-    if (position_info.pos_id === '' || position_info.unix_timestamp_ms === 0) {
-        console.log('getCheckPointStatus: position_info is empty');
-        return {success: false, error: 'pos_info_empty'};
-    }
-    let table_name = util.format('check_point_status_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id);
+    let table_name = 'position_info';
     let ret_table_chk = await tableExists(db, table_name);
     if (ret_table_chk.success) {
         if (!ret_table_chk.exist) {
-            console.log('getCheckPointStatus table not exist: %s', table_name);
+            console.log('getAllPositionInfo table not exist: %s', table_name);
             return {success: false, error: 'table_not_exist'};
         }
     } else {
-        console.log('getCheckPointStatus table exist check failed:', ret_table_chk.error);
+        console.log('getAllPositionInfo table exist check failed:', ret_table_chk.error);
+        return ret_table_chk;
+    }
+
+    let order_by_clause = 'unix_timestamp_ms';
+
+    let sql = util.format('SELECT * FROM %s ORDER BY %s', table_name, order_by_clause);
+    let ret = await allAsync<PositionInfoDB>(db, sql);
+    if (ret.success) {
+        console.log('getAllPositionInfo successfully: \n', sql);
+        if (ret.rows) {
+            console.log(ret.rows);
+            let position_infos: PositionInfo[] = [];
+            for (const row of ret.rows) {
+                position_infos.push(positionInfoDB2PositionInfo(row));
+            }
+            return {success: true, position_infos};
+        } else {
+            return {success: false, error: 'no_row_selected'};
+        }
+    } else {
+        console.log('getAllPositionInfo failed: %s\n%s', ret.error, sql);
+    }
+    return ret;
+}
+
+
+
+export async function getAllCheckPointStatus(db: sqlite3.Database, position_info: PositionInfo): Promise<{success: boolean; error?: string, check_point_status_arr?: CheckPointStatus[]}>{
+    if (position_info.pos_id === '' || position_info.unix_timestamp_ms === 0) {
+        console.log('getAllCheckPointStatus: position_info is empty');
+        return {success: false, error: 'pos_info_empty'};
+    }
+    let table_name = util.format('check_point_status_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id);
+    let ret_table_chk = await tableExists(db, table_name);
+    if (ret_table_chk.success) {
+        if (!ret_table_chk.exist) {
+            console.log('getAllCheckPointStatus table not exist: %s', table_name);
+            return {success: false, error: 'table_not_exist'};
+        }
+    } else {
+        console.log('getAllCheckPointStatus table exist check failed:', ret_table_chk.error);
         return ret_table_chk;
     }
 
@@ -587,37 +664,38 @@ export async function getCheckPointStatus(db: sqlite3.Database, position_info: P
     let sql = util.format('SELECT * FROM %s ORDER BY %s', table_name, order_by_clause);
     let ret = await allAsync<CheckPointStatusDB>(db, sql);
     if (ret.success) {
-        console.log('getCheckPointStatus successfully: \n', sql);
+        console.log('getAllCheckPointStatus successfully: \n', sql);
         if (ret.rows) {
             console.log(ret.rows);
-            check_point_status_arr = [];
+            let check_point_status_arr: CheckPointStatus[] = [];
             for (const row of ret.rows) {
                 check_point_status_arr.push(checkPointStatusDB2CheckPointStatus(row));
-            }                
+            }
+            return {success: true, check_point_status_arr};
         } else {
             return {success: false, error: 'no_row_selected'};
         }
     } else {
-        console.log('getCheckPointStatus failed: %s\n%s', ret.error, sql);
+        console.log('getAllCheckPointStatus failed: %s\n%s', ret.error, sql);
     }
     return ret;
 }
 
 
-export async function getTransactionInfo(db: sqlite3.Database, position_info: PositionInfo, tx_info_arr: TransactionInfo[]): Promise<{success: boolean; error?: string}>{
+export async function getAllTransactionInfo(db: sqlite3.Database, position_info: PositionInfo): Promise<{success: boolean; error?: string, tx_info_arr?: TransactionInfo[]}>{
     if (position_info.pos_id === '' || position_info.unix_timestamp_ms === 0) {
-        console.log('getTransactionInfo: position_info is empty');
+        console.log('getAllTransactionInfo: position_info is empty');
         return {success: false, error: 'pos_info_empty'};
     }
-    let table_name = util.format('transaction_info_%s_%s', new Date(position_info.unix_timestamp_ms).toISOString(), position_info.pos_id);
+    let table_name = util.format('transaction_info_%s_%s', formatDate(new Date(position_info.unix_timestamp_ms)), position_info.pos_id);
     let ret_table_chk = await tableExists(db, table_name);
     if (ret_table_chk.success) {
         if (!ret_table_chk.exist) {
-            console.log('getTransactionInfo table not exist: %s', table_name);
+            console.log('getAllTransactionInfo table not exist: %s', table_name);
             return {success: false, error: 'table_not_exist'};
         }
     } else {
-        console.log('getTransactionInfo table exist check failed:', ret_table_chk.error);
+        console.log('getAllTransactionInfo table exist check failed:', ret_table_chk.error);
         return ret_table_chk;
     }
 
@@ -626,81 +704,21 @@ export async function getTransactionInfo(db: sqlite3.Database, position_info: Po
     let sql = util.format('SELECT * FROM %s ORDER BY %s', table_name, order_by_clause);
     let ret = await allAsync<TransactionInfoDB>(db, sql);
     if (ret.success) {
-        console.log('getPositionInfo successfully: \n', sql);
+        console.log('getAllTransactionInfo successfully: \n', sql);
         if (ret.rows) {
             console.log(ret.rows);
-            tx_info_arr = [];
+            let tx_info_arr: TransactionInfo[] = [];
             for (const row of ret.rows) {
                 tx_info_arr.push(transactionInfoDB2TransactionInfo(row));
-            }                
+            }
+            return {success: true, tx_info_arr};
         } else {
             return {success: false, error: 'no_row_selected'};
         }
     } else {
-        console.log('getPositionInfo failed: %s\n%s', ret.error, sql);
+        console.log('getAllTransactionInfo failed: %s\n%s', ret.error, sql);
     }
     return ret;
 }
 
 
-
-
-
-// async function sqliteTest2() {
-//         // open database
-//     let db: sqlite3.Database | null = null;
-//     while (true) {
-//         try {
-//             db = await openDatabase(SQLITE_DB_FILE_NAME);
-//             await runAsync(db, 
-//                 `CREATE TABLE IF NOT EXISTS position_info(
-//                         open_epoch_time INTEGER,
-//                         pos_id TEXT,
-//                         is_closed INTEGER,
-//                         close_epoch_time INTEGER,
-//                         close_tick_index TEXT,
-//                         close_tick_index2 TEXT,
-//                         total_gas_used TEXT,
-//                         fee_coin_a TEXT,
-//                         fee_coin_b TEXT,
-//                         rwd_sui TEXT,
-//                         rwd_cetus TEXT,                        
-//                         benefit_holding_coin_ab TEXT,
-//                         benefit_holding_coin_a TEXT,
-//                         benefit_holding_coin_b TEXT,
-//                         PRIMARY KEY (open_epoch_time, pos_id)
-//                 )`
-//             );
-
-//             // await runAsyncWithParam(db, 
-//             //     `INSERT INTO position_info (open_epoch_time, pos_id) VALUES (?, ?)`,
-//             //     [12345, 'pos_123456']
-//             // );
-
-//             await runAsyncWithParam(db, 
-//                 `UPDATE position_info 
-//                  SET rwd_sui=?
-//                  WHERE pos_id='pos_123456'`,
-//                 ['2356']
-//             );
-
-
-//             let rows = await allAsync<PositionInfoDB>(db, `SELECT * FROM position_info`,  []);
-//             console.log(rows)
-
-
-//         } catch(e) {
-//             if (e instanceof Error) {
-//                 console.error('%s [error] OpenDatabase an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
-//             } else {
-//                 console.error('OpenDatabase get an exception'); 
-//                 console.error(e);
-//             }
-//             console.log('Error opening database, wait 1s and try again...');
-//             db?.close();
-//             await new Promise(f => setTimeout(f, 2000));
-//             continue;
-//         }
-//         break;
-//     }
-// }
