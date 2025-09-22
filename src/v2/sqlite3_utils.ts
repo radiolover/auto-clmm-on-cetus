@@ -56,22 +56,19 @@ type CheckPointStatusDB = {
     cur_tick_index_for_tx: number;
     tick_lower_index_for_tx: number;
     tick_upper_index_for_tx: number;
-    tick_index: number;
+    usdc_sui_tick_index: number;
     sui_price: string;
-    cetus_tick_index: number;
+    usdc_cetus_tick_index: number;
     cetus_price: string;
     usdc_balance: string;
     sui_balance: string;
     cetus_balance: string;
-    usdc_quota_in_wallet: string;
-    sui_quota_in_wallet: string;
-    usdc_quota_in_pos: string;
-    sui_quota_in_pos: string;
+    usdc_in_liquidity: string;
+    sui_in_liquidity: string;
     usdc_fee: string;
     sui_fee: string;
     sui_rwd: string;
     cetus_rwd: string;
-    gas_reserved: string;    
     pos_unix_timestamp_ms: number;
     pos_id: string;
 };
@@ -84,22 +81,19 @@ function checkPointStatusDB2CheckPointStatus(row: CheckPointStatusDB): CheckPoin
     ret.cur_tick_index_for_tx = row.cur_tick_index_for_tx;
     ret.tick_lower_index_for_tx = row.tick_lower_index_for_tx;
     ret.tick_upper_index_for_tx = row.tick_upper_index_for_tx;
-    ret.tick_index = row.tick_index;
+    ret.usdc_sui_tick_index = row.usdc_sui_tick_index;
     ret.sui_price = new Decimal(row.sui_price);
-    ret.cetus_tick_index = row.cetus_tick_index;
+    ret.usdc_cetus_tick_index = row.usdc_cetus_tick_index;
     ret.cetus_price = new Decimal(row.cetus_price);
     ret.usdc_balance = new BN(row.usdc_balance);
     ret.sui_balance = new BN(row.sui_balance);
     ret.cetus_balance = new BN(row.cetus_balance);
-    ret.usdc_quota_in_wallet = new BN(row.usdc_quota_in_wallet);
-    ret.sui_quota_in_wallet = new BN(row.sui_quota_in_wallet);
-    ret.usdc_quota_in_pos = new BN(row.usdc_quota_in_pos);
-    ret.sui_quota_in_pos = new BN(row.sui_quota_in_pos);
+    ret.usdc_in_liquidity = new BN(row.usdc_in_liquidity);
+    ret.sui_in_liquidity = new BN(row.sui_in_liquidity);
     ret.usdc_fee = new BN(row.usdc_fee);
     ret.sui_fee = new BN(row.sui_fee);
     ret.sui_rwd = new BN(row.sui_rwd);
     ret.cetus_rwd = new BN(row.cetus_rwd);
-    ret.gas_reserved = new BN(row.gas_reserved);
     return ret;
 }
 
@@ -298,22 +292,19 @@ export async function tryCreateCheckPointStatusTable(db: sqlite3.Database, posit
                 cur_tick_index_for_tx INTEGER,
                 tick_lower_index_for_tx INTEGER,
                 tick_upper_index_for_tx INTEGER,
-                tick_index INTEGER,
+                usdc_sui_tick_index INTEGER,
                 sui_price TEXT,
-                cetus_tick_index INTEGER,
+                usdc_cetus_tick_index INTEGER,
                 cetus_price TEXT,
                 usdc_balance TEXT,
                 sui_balance TEXT,
                 cetus_balance TEXT,
-                usdc_quota_in_wallet TEXT,
-                sui_quota_in_wallet TEXT,
-                usdc_quota_in_pos TEXT,
-                sui_quota_in_pos TEXT,
+                usdc_in_liquidity TEXT,
+                sui_in_liquidity TEXT,
                 usdc_fee TEXT,
                 sui_fee TEXT,
                 sui_rwd TEXT,                        
-                cetus_rwd TEXT,
-                gas_reserved TEXT,                
+                cetus_rwd TEXT,            
                 pos_unix_timestamp_ms INTEGER,
                 pos_id TEXT
         )`;
@@ -483,28 +474,25 @@ export async function insertCheckPointStatus(db: sqlite3.Database, position_info
         return ret_table_chk;
     }
 
-    let value_string = util.format('%d, \'%s\', %d, %d, %d, %d, \'%s\', %d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %d, \'%s\'', 
+    let value_string = util.format('%d, \'%s\', %d, %d, %d, %d, \'%s\', %d, \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %d, \'%s\'', 
         check_point_status.unix_timestamp_ms,
         check_point_status.type,
         check_point_status.cur_tick_index_for_tx,
         check_point_status.tick_lower_index_for_tx,
         check_point_status.tick_upper_index_for_tx,
-        check_point_status.tick_index,
+        check_point_status.usdc_sui_tick_index,
         check_point_status.sui_price.toString(),
-        check_point_status.cetus_tick_index,
+        check_point_status.usdc_cetus_tick_index,
         check_point_status.cetus_price.toString(),
         check_point_status.usdc_balance.toString(),
         check_point_status.sui_balance.toString(),
         check_point_status.cetus_balance.toString(),
-        check_point_status.usdc_quota_in_wallet.toString(),
-        check_point_status.sui_quota_in_wallet.toString(),
-        check_point_status.usdc_quota_in_pos.toString(),
-        check_point_status.sui_quota_in_pos.toString(),
+        check_point_status.usdc_in_liquidity.toString(),
+        check_point_status.sui_in_liquidity.toString(),
         check_point_status.usdc_fee.toString(),
         check_point_status.sui_fee.toString(),
         check_point_status.sui_rwd.toString(),
         check_point_status.cetus_rwd.toString(),
-        check_point_status.gas_reserved.toString(),
         position_info.unix_timestamp_ms,
         position_info.pos_id
     );
@@ -589,7 +577,7 @@ export async function getPositionInfo(db: sqlite3.Database, pos_object_id: strin
     if (ret.success) {
         console.log('getPositionInfo successfully: \n', sql);
         if (ret.row) {
-            console.log(ret.row);
+            // console.log(ret.row);
             let position_info = positionInfoDB2PositionInfo(ret.row);
             return {success: true, position_info};
             
@@ -625,7 +613,7 @@ export async function getAllPositionInfo(db: sqlite3.Database): Promise<{success
     if (ret.success) {
         console.log('getAllPositionInfo successfully: \n', sql);
         if (ret.rows) {
-            console.log(ret.rows);
+            // console.log(ret.rows);
             let position_infos: PositionInfo[] = [];
             for (const row of ret.rows) {
                 position_infos.push(positionInfoDB2PositionInfo(row));
@@ -666,7 +654,7 @@ export async function getAllCheckPointStatus(db: sqlite3.Database, position_info
     if (ret.success) {
         console.log('getAllCheckPointStatus successfully: \n', sql);
         if (ret.rows) {
-            console.log(ret.rows);
+            // console.log(ret.rows);
             let check_point_status_arr: CheckPointStatus[] = [];
             for (const row of ret.rows) {
                 check_point_status_arr.push(checkPointStatusDB2CheckPointStatus(row));
@@ -706,7 +694,7 @@ export async function getAllTransactionInfo(db: sqlite3.Database, position_info:
     if (ret.success) {
         console.log('getAllTransactionInfo successfully: \n', sql);
         if (ret.rows) {
-            console.log(ret.rows);
+            // console.log(ret.rows);
             let tx_info_arr: TransactionInfo[] = [];
             for (const row of ret.rows) {
                 tx_info_arr.push(transactionInfoDB2TransactionInfo(row));
@@ -722,3 +710,64 @@ export async function getAllTransactionInfo(db: sqlite3.Database, position_info:
 }
 
 
+
+
+
+// async function sqliteTest2() {
+//         // open database
+//     let db: sqlite3.Database | null = null;
+//     while (true) {
+//         try {
+//             db = await openDatabase(SQLITE_DB_FILE_NAME);
+//             await runAsync(db, 
+//                 `CREATE TABLE IF NOT EXISTS position_info(
+//                         open_epoch_time INTEGER,
+//                         pos_id TEXT,
+//                         is_closed INTEGER,
+//                         close_epoch_time INTEGER,
+//                         close_tick_index TEXT,
+//                         close_tick_index2 TEXT,
+//                         total_gas_used TEXT,
+//                         fee_coin_a TEXT,
+//                         fee_coin_b TEXT,
+//                         rwd_sui TEXT,
+//                         rwd_cetus TEXT,                        
+//                         benefit_holding_coin_ab TEXT,
+//                         benefit_holding_coin_a TEXT,
+//                         benefit_holding_coin_b TEXT,
+//                         PRIMARY KEY (open_epoch_time, pos_id)
+//                 )`
+//             );
+
+//             // await runAsyncWithParam(db, 
+//             //     `INSERT INTO position_info (open_epoch_time, pos_id) VALUES (?, ?)`,
+//             //     [12345, 'pos_123456']
+//             // );
+
+//             await runAsyncWithParam(db, 
+//                 `UPDATE position_info 
+//                  SET rwd_sui=?
+//                  WHERE pos_id='pos_123456'`,
+//                 ['2356']
+//             );
+
+
+//             let rows = await allAsync<PositionInfoDB>(db, `SELECT * FROM position_info`,  []);
+//             console.log(rows)
+
+
+//         } catch(e) {
+//             if (e instanceof Error) {
+//                 console.error('%s [error] OpenDatabase an exception:\n%s \n%s \n%s', date.toLocaleString(), e.message, e.name, e.stack);
+//             } else {
+//                 console.error('OpenDatabase get an exception'); 
+//                 console.error(e);
+//             }
+//             console.log('Error opening database, wait 1s and try again...');
+//             db?.close();
+//             await new Promise(f => setTimeout(f, 2000));
+//             continue;
+//         }
+//         break;
+//     }
+// }
