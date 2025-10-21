@@ -1,8 +1,11 @@
 # auto-clmm-on-cetus
 auto-clmm-on-cetus is a liquidity mining tool on the SUI blockchain that dynamically adjusts the distribution range of positions by tracking the current price in real time.
 
-Warning: Mining rewards may not be sufficient to cover impermanent loss, gas costs, and swap fees, and may result in losses.
 
+> [!WARNING]
+> Mining rewards may not be sufficient to cover impermanent loss, gas costs, and swap fees, and may result in losses.
+
+# setup
 ```bash
 # set up
 npm i @cetusprotocol/aggregator-sdk
